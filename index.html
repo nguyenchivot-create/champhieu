@@ -87,6 +87,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .lvRes .big small { font-size: 18px; color: var(--muted); }
 .lvRes button { background: var(--surface); color: var(--ink); border-color: var(--line); }
 .lvBot { position: relative; z-index: 2; display: flex; gap: 10px; justify-content: center; padding: 6px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.tbl .chip { white-space: nowrap; display: inline-block; margin-top: 3px; }
+.nmimg { display: block; width: 140px; height: 36px; object-fit: contain; object-position: left center; background: #fff; border: 1px solid var(--line); border-radius: 4px; margin-top: 4px; }
 .shot { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); display: block; background: #000; }
 .scorebox { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .score { font-size: 44px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -622,7 +624,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     else if (ui.tab === 'res') v.innerHTML = viewRes();
     else v.innerHTML = viewPrint();
     if (ui.tab === 'scan' && ui.review) { refreshReview(true); }
-    if (ui.tab === 'res') drawCharts();
+    if (ui.tab === 'res') { drawCharts(); hydrateNames(); }
   }
 
   /* ---------- Tab: Chấm bài ---------- */
@@ -657,6 +659,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       '<div id="rvScore"></div>' +
       '<div class="grid2"><label class="f">' + (isKey ? 'Mã đề của đáp án' : 'ID học sinh (5 chữ số)') + (isKey ? '<select class="in" id="rvVer"></select>' : '<input type="text" id="rvId" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="Không tô, vẫn lưu được">') + '</label>' +
       (isKey ? '' : '<label class="f">Mã đề (Key Version)<select class="in" id="rvVer"></select></label>') + '</div>' +
+      '<img id="rvNmImg" class="nmimg" alt="Tên viết tay" style="width:100%;height:56px"' + (r.nameUrl ? ' src="' + r.nameUrl + '"' : ' hidden') + '>' +
       '<div id="rvName" class="small muted"></div>' +
       (isKey ? '' : '<label class="f">Trạng thái bài<select class="in" id="rvSt"><option value="">Chưa duyệt</option><option value="checked">Đã duyệt</option><option value="review">Cần kiểm tra lại</option></select></label>') +
       '<div class="legend"><span><i style="background:var(--ok-soft);border-color:var(--ok)"></i>Đúng</span><span><i style="background:var(--bad-soft);border-color:var(--bad)"></i>Sai</span><span><i style="border-color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn)"></i>Máy chưa chắc, nên kiểm tra</span><span>Chạm một ô để đổi đáp án</span></div>' +
@@ -762,6 +765,42 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     for (var i = 0, p = 0; i < g.length; i++, p += 4) g[i] = (d[p] * 77 + d[p + 1] * 150 + d[p + 2] * 29) >> 8;
     return { gray: g, w: w, h: h, canvas: cv };
   }
+  /* Cắt ô Name viết tay trên phiếu (có hiệu chỉnh phối cảnh) để lưu cạnh điểm */
+  var NM = { x0: 201, x1: 356, y0: 146.5, y1: 169.5, ppp: 4 };
+  function cropName(cv, H) {
+    return new Promise(function (resolve) {
+      try {
+        var w = Math.round((NM.x1 - NM.x0) * NM.ppp), h = Math.round((NM.y1 - NM.y0) * NM.ppp), W = cv.width, HH = cv.height;
+        var src = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, HH).data;
+        var out = document.createElement('canvas'); out.width = w; out.height = h;
+        var octx = out.getContext('2d'), im = octx.createImageData(w, h), dd = im.data, gray = new Uint8Array(w * h), x, y, c;
+        for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
+          var p = OMR.applyH(H, NM.x0 + (x + 0.5) / NM.ppp, NM.y0 + (y + 0.5) / NM.ppp), fx = p[0] - 0.5, fy = p[1] - 0.5;
+          var ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy, o = (y * w + x) * 4;
+          var x1 = Math.min(W - 1, Math.max(0, ix + 1)), y1 = Math.min(HH - 1, Math.max(0, iy + 1)), x0 = Math.min(W - 1, Math.max(0, ix)), y0 = Math.min(HH - 1, Math.max(0, iy));
+          for (c = 0; c < 3; c++) {
+            var v = src[(y0 * W + x0) * 4 + c] * (1 - tx) * (1 - ty) + src[(y0 * W + x1) * 4 + c] * tx * (1 - ty) + src[(y1 * W + x0) * 4 + c] * (1 - tx) * ty + src[(y1 * W + x1) * 4 + c] * tx * ty;
+            dd[o + c] = v;
+          }
+          dd[o + 3] = 255; gray[y * w + x] = (dd[o] * 77 + dd[o + 1] * 150 + dd[o + 2] * 29) >> 8;
+        }
+        octx.putImageData(im, 0, 0);
+        var hist = new Array(256).fill(0), n = 0, xa = Math.round(w * 0.06), xb = Math.round(w * 0.96), ya = Math.round(h * 0.15), yb = Math.round(h * 0.85);
+        for (y = ya; y < yb; y++) for (x = xa; x < xb; x++) { hist[gray[y * w + x]]++; n++; }
+        var acc = 0, paper = 255, k; for (k = 0; k < 256; k++) { acc += hist[k]; if (acc >= n * 0.7) { paper = k; break; } }
+        var thr = paper * 0.65, dark = 0; for (k = 0; k < thr; k++) dark += hist[k];
+        out.toBlob(function (b) { resolve({ blob: b, ink: !!b && dark / n > 0.008 }); }, 'image/jpeg', 0.75);
+      } catch (e) { resolve({ blob: null, ink: false }); }
+    });
+  }
+  var NMURL = {};
+  function hydrateNames() {
+    Array.prototype.forEach.call(document.querySelectorAll('img[data-nm]'), function (im) {
+      var id = im.getAttribute('data-nm');
+      if (NMURL[id]) { im.src = NMURL[id]; return; }
+      imgGet('n_' + id).then(function (b) { if (b) { NMURL[id] = URL.createObjectURL(b); im.src = NMURL[id]; } else im.remove(); });
+    });
+  }
   /* Ảnh phiếu gốc lưu trong IndexedDB của trình duyệt (không nằm trong localStorage) */
   var IDBP = null;
   function idb() {
@@ -794,6 +833,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         mode: job.mode, fname: job.file.name, idx: job.idx, total: job.total, base: im.canvas, W: im.w, H: im.h, res: res,
         ans: res.answers.slice(), sid: res.id, idUnsure: res.idUnsure, ver: res.version, warn: warn, st: '', hist: []
       };
+      (function (rv) { cropName(im.canvas, res.H).then(function (o) { rv.nameBlob = o.blob; rv.nameInk = o.ink; if (o.ink && o.blob) { rv.nameUrl = URL.createObjectURL(o.blob); var el = document.getElementById('rvNmImg'); if (el) { el.src = rv.nameUrl; el.hidden = false; } } }); })(ui.review);
     } catch (e) {
       ui.errs.push((job.file.name || 'Ảnh') + ': ' + e.message);
     }
@@ -851,6 +891,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       for (var a = 0; a < exs.length; a++) for (var b = 0; b < exs[a].results.length; b++) {
         var rid = exs[a].results[b].id, blob = await imgGet(rid);
         if (blob) { var du = await blobToDataUrl(blob); if (du) { images[rid] = du; nImg++; } }
+        var nb = exs[a].results[b].nm ? await imgGet('n_' + rid) : null;
+        if (nb) { var du2 = await blobToDataUrl(nb); if (du2) images['n_' + rid] = du2; }
       }
     }
     var pack = { app: 'champhieu', v: 1, ts: Date.now(), scope: scope, thr: S.thr, exams: exs, images: images };
@@ -956,7 +998,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     h += '<div class="card scroll"><table class="tbl"><thead><tr><th>#</th><th>ID / Họ tên</th><th>Mã đề</th><th class="num">Đúng</th><th class="num">Điểm</th><th></th></tr></thead><tbody>';
     list.forEach(function (x) {
       var r = x.r, i = x.i, nm = x.name;
-      h += '<tr class="rw" data-open="' + r.id + '"><td class="muted">' + (i + 1) + '</td><td>' + (r.sid ? '<span class="mono">' + esc(r.sid) + '</span>' : '<span class="muted">Không có ID</span>') + (r.st === 'checked' ? ' <span class="chip on">đã duyệt</span>' : '') + (nm ? '<div class="small muted">' + esc(nm) + '</div>' : '') + (x.flags.length ? '<div style="margin-top:3px">' + x.flags.map(function (f) { return '<span class="chip warn">' + esc(f) + '</span>'; }).join(' ') + '</div>' : '') + '</td><td>' + (r.ver ? r.ver : (x.g ? '<span class="muted" title="Không tô mã đề, chấm theo mã mặc định">(' + x.g.usedVer + ')</span>' : '<span class="muted">-</span>')) + '</td>' +
+      h += '<tr class="rw" data-open="' + r.id + '"><td class="muted">' + (i + 1) + '</td><td>' + (r.sid ? '<span class="mono">' + esc(r.sid) + '</span>' : '<span class="muted">Không có ID</span>') + (r.st === 'checked' ? ' <span class="chip on">đã duyệt</span>' : '') + (nm ? '<div class="small muted">' + esc(nm) + '</div>' : (r.nm ? '<img class="nmimg" data-nm="' + r.id + '" alt="Tên viết tay">' : '')) + (x.flags.length ? '<div style="margin-top:3px">' + x.flags.map(function (f) { return '<span class="chip warn">' + esc(f) + '</span>'; }).join(' ') + '</div>' : '') + '</td><td>' + (r.ver ? r.ver : (x.g ? '<span class="muted" title="Không tô mã đề, chấm theo mã mặc định">(' + x.g.usedVer + ')</span>' : '<span class="muted">-</span>')) + '</td>' +
         '<td class="num">' + (x.g ? x.g.ok + '/' + x.g.tot : '-') + '</td><td class="num"><b>' + (x.g ? fmt(x.g.score) : '-') + '</b></td>' +
         '<td>' + (ui.confirmDel === r.id ? '<button class="btn sm danger" data-del2="' + r.id + '">Xóa</button> <button class="btn sm" data-delno="1">Giữ</button>' : '<button class="btn sm" data-del="' + r.id + '" aria-label="Xóa bài">Xóa</button>') + '</td></tr>';
     });
@@ -1179,13 +1221,15 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var uns = res.unsure.filter(function (u, q2) { return u && ans[q2] === res.answers[q2]; }).length;
     var rec = { id: 'r' + Date.now().toString(36) + Math.floor(Math.random() * 999), ts: Date.now(), sid: sid, ver: res.version, ans: ans, st: '', hist: [], uns: uns };
     var dup = sid && ex.results.filter(function (x) { return x.sid === sid; })[0];
-    LV.last = { sig: sig }; LV.pending = { rec: rec, canvas: full.canvas, dupId: dup ? dup.id : null };
+    var nmo = await cropName(full.canvas, res.H); rec.nm = nmo.ink ? 1 : 0;
+    LV.last = { sig: sig }; LV.pending = { rec: rec, canvas: full.canvas, dupId: dup ? dup.id : null, nm: nmo };
     if (!dup) liveCommit(false);
     LV.savedShape = shape; liveShow(rec, !!dup, res);
   }
   function liveCommit(overwrite) {
     var P = LV.pending, ex = cur(); if (!P) return;
-    if (overwrite && P.dupId) { imgDel(P.dupId); ex.results = ex.results.filter(function (x) { return x.id !== P.dupId; }); }
+    if (P.nm && P.nm.ink && P.nm.blob) imgPut('n_' + P.rec.id, P.nm.blob);
+    if (overwrite && P.dupId) { imgDel(P.dupId); imgDel('n_' + P.dupId); ex.results = ex.results.filter(function (x) { return x.id !== P.dupId; }); }
     ex.results.push(P.rec); save();
     thumb(P.canvas).then(function (b) { if (b) imgPut(P.rec.id, b); });
     LV.count++; ui.sess++; LV.undoId = P.rec.id; LV.saved = true; lvCount();
@@ -1198,7 +1242,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (rec.uns > 0) flags.push(rec.uns + ' ô chưa chắc, nên xem lại ở tab Kết quả.');
     if (g && g.assumed) flags.push('Không tô mã đề, chấm theo mã ' + g.usedVer + '.');
     el.className = 'lvRes' + (flags.length ? ' warn' : ''); el.hidden = false;
-    el.innerHTML = '<div class="big">' + (g ? fmt(g.score) : '-') + '<small> / ' + fmt(ex.scale) + '</small></div>' +
+    var nmUrl = LV.pending && LV.pending.nm && LV.pending.nm.ink ? URL.createObjectURL(LV.pending.nm.blob) : '';
+    el.innerHTML = (nmUrl ? '<img class="nmimg" src="' + nmUrl + '" alt="Tên viết tay" style="max-width:100%;height:46px;margin:0 0 8px">' : '') + '<div class="big">' + (g ? fmt(g.score) : '-') + '<small> / ' + fmt(ex.scale) + '</small></div>' +
       '<div style="margin-top:4px"><b>ID: ' + (rec.sid ? esc(rec.sid) : 'không có') + '</b>' + ((ex.roster[rec.sid]) ? ' · ' + esc(ex.roster[rec.sid]) : '') + '</div>' +
       (g ? '<div class="small muted">Đúng ' + g.ok + ' · Sai ' + g.wrong + ' · Trống ' + g.blank + (g.part ? ' · Một phần ' + g.part : '') + '</div>' : '') +
       (flags.length ? '<div class="small" style="margin-top:6px">' + flags.map(esc).join('<br>') + '</div>' : '') +
@@ -1210,7 +1255,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     clearInterval(LV.showTimer); LV.showTimer = setInterval(upd, 250); upd();
     var b1 = el.querySelector('#lvUndo'), b2 = el.querySelector('#lvOver'), b3 = el.querySelector('#lvNext');
     if (b1) b1.addEventListener('click', function () {
-      var ex2 = cur(); ex2.results = ex2.results.filter(function (x) { return x.id !== LV.undoId; }); imgDel(LV.undoId); save(); LV.count = Math.max(0, LV.count - 1); ui.sess = Math.max(0, ui.sess - 1); LV.last = null; lvCount(); lvMsg('Đã hoàn tác bài vừa quét'); liveResume(true);
+      var ex2 = cur(); ex2.results = ex2.results.filter(function (x) { return x.id !== LV.undoId; }); imgDel(LV.undoId); imgDel('n_' + LV.undoId); save(); LV.count = Math.max(0, LV.count - 1); ui.sess = Math.max(0, ui.sess - 1); LV.last = null; lvCount(); lvMsg('Đã hoàn tác bài vừa quét'); liveResume(true);
     });
     if (b2) b2.addEventListener('click', function () { liveCommit(true); lvMsg('Đã ghi đè bài cũ'); liveResume(); });
     if (b3) b3.addEventListener('click', function () { liveResume(); });
@@ -1246,11 +1291,12 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (d.open) {
       var rs = ex.results.filter(function (x) { return x.id === d.open; })[0]; if (!rs) return;
       ui.review = { mode: 'grade', editId: rs.id, fname: '', idx: 1, total: 1, base: null, res: { unsure: [], answers: [] }, ans: rs.ans.slice(), sid: rs.sid, idUnsure: false, ver: rs.ver, warn: '', st: rs.st || '', hist: rs.hist || [] };
+      if (rs.nm) imgGet('n_' + rs.id).then(function (b) { if (b && ui.review && ui.review.editId === rs.id) { ui.review.nameUrl = URL.createObjectURL(b); var el = document.getElementById('rvNmImg'); if (el) { el.src = ui.review.nameUrl; el.hidden = false; } } });
       imgGet(rs.id).then(function (b) { if (b && ui.review && ui.review.editId === rs.id) { ui.review.imgUrl = URL.createObjectURL(b); render(); } });
       ui.tab = 'scan'; render(); window.scrollTo(0, 0); return;
     }
     if (d.del) { ui.confirmDel = d.del; render(); return; }
-    if (d.del2) { imgDel(d.del2); ex.results = ex.results.filter(function (x) { return x.id !== d.del2; }); ui.confirmDel = null; save(); render(); toast('Đã xóa bài'); return; }
+    if (d.del2) { imgDel(d.del2); imgDel('n_' + d.del2); ex.results = ex.results.filter(function (x) { return x.id !== d.del2; }); ui.confirmDel = null; save(); render(); toast('Đã xóa bài'); return; }
     if (d.delno) { ui.confirmDel = null; render(); return; }
     switch (d.act) {
       case 'cam': $('#inCam').click(); break;
@@ -1269,6 +1315,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         rec.hist = (old0 && old0.hist ? old0.hist : []).slice(-20); if (chg.length) rec.hist.push({ ts: Date.now(), c: chg.slice(0, 40) });
         rec.uns = r.base ? r.res.unsure.filter(function (u, q2) { return u && r.ans[q2] === r.res.answers[q2]; }).length : 0;
         if (r.base) { thumb(r.base).then(function (b) { if (b) imgPut(rec.id, b); }); ui.sess++; }
+        if (r.base && r.nameInk && r.nameBlob) { imgPut('n_' + rec.id, r.nameBlob); rec.nm = 1; } else if (old0 && old0.nm) rec.nm = 1;
         if (r.editId) { ex.results = ex.results.map(function (x) { return x.id === r.editId ? rec : x; }); }
         else {
           if (rec.sid) ex.results = ex.results.filter(function (x) { return x.sid !== rec.sid; });
