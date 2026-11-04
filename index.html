@@ -534,7 +534,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function load() { try { var v = JSON.parse(localStorage.getItem(KEY)); if (v && v.exams && v.exams.length) return v; } catch (e) {} return null; }
   var S = load();
   if (!S) { var e0 = newExam('Bài kiểm tra 1'); S = { exams: [e0], cur: e0.id, thr: 0.3 }; }
-  S.exams.forEach(function (x) { if (!x.v2) { x.v2 = 1; x.partial = x.partial || 'none'; x.pts = x.pts || []; if (!x.results.length && x.scale === 10) x.scale = 100; } });
+  function normEx(x) { if (!x.v2) { x.v2 = 1; x.partial = x.partial || 'none'; x.pts = x.pts || []; if (!x.results.length && x.scale === 10) x.scale = 100; } x.keys = x.keys || {}; x.results = x.results || []; x.roster = x.roster || {}; x.pts = x.pts || []; return x; }
+  S.exams.forEach(normEx);
   var saveT = null;
   function save() { clearTimeout(saveT); saveT = setTimeout(function () { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 150); }
   function cur() { return S.exams.filter(function (e) { return e.id === S.cur; })[0] || S.exams[0]; }
@@ -825,6 +826,66 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     return h;
   }
 
+  /* ---------- Sao lưu và khôi phục ---------- */
+  function blobToDataUrl(b) { return new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { res(fr.result); }; fr.onerror = function () { res(null); }; fr.readAsDataURL(b); }); }
+  function dataUrlToBlob(u) { var m = /^data:([^;,]+)?(;base64)?,(.*)$/.exec(u || ''); if (!m) return null; var bin = atob(m[3]), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: m[1] || 'image/jpeg' }); }
+  async function doBackup() {
+    var scope = ui.bkScope || 'all', withImg = ui.bkImg !== false, exs = scope === 'cur' ? [cur()] : S.exams, images = {}, nImg = 0;
+    ui.dlMsg = 'Đang tạo file sao lưu…'; render();
+    if (withImg) {
+      for (var a = 0; a < exs.length; a++) for (var b = 0; b < exs[a].results.length; b++) {
+        var rid = exs[a].results[b].id, blob = await imgGet(rid);
+        if (blob) { var du = await blobToDataUrl(blob); if (du) { images[rid] = du; nImg++; } }
+      }
+    }
+    var pack = { app: 'champhieu', v: 1, ts: Date.now(), scope: scope, thr: S.thr, exams: exs, images: images };
+    var nm = scope === 'cur' ? safeName(cur().name) : 'tat-ca';
+    var ok = await saveFile('champhieu-sao-luu-' + nm + '-' + dateTag() + '.json', JSON.stringify(pack));
+    if (ok) ui.dlMsg = 'Đã tạo file sao lưu: ' + exs.length + ' bài kiểm tra, ' + exs.reduce(function (t, e) { return t + e.results.length; }, 0) + ' bài đã chấm' + (withImg ? ', ' + nImg + ' ảnh phiếu' : ', không kèm ảnh') + '. Hãy cất file ở nơi riêng tư vì có mã số sinh viên.';
+    render();
+  }
+  async function doRestore(file, mode) {
+    try {
+      var pack = JSON.parse(await file.text());
+      if (!pack || pack.app !== 'champhieu' || !Array.isArray(pack.exams)) throw new Error('Đây không phải file sao lưu của ứng dụng này.');
+      var nEx = 0, nRes = 0;
+      pack.exams.forEach(normEx);
+      if (mode === 'replace') { S.exams = pack.exams.length ? pack.exams : S.exams; S.cur = S.exams[0].id; if (pack.thr) S.thr = pack.thr; }
+      else {
+        pack.exams.forEach(function (ne) {
+          var ex0 = S.exams.filter(function (x) { return x.id === ne.id; })[0];
+          if (!ex0) { S.exams.push(ne); return; }
+          ne.results.forEach(function (r) { var k = -1; ex0.results.forEach(function (x, i) { if (x.id === r.id) k = i; }); if (k >= 0) ex0.results[k] = r; else ex0.results.push(r); });
+          Object.keys(ne.keys).forEach(function (v) { if (!ex0.keys[v]) ex0.keys[v] = ne.keys[v]; });
+          Object.keys(ne.roster).forEach(function (v) { if (!(v in ex0.roster)) ex0.roster[v] = ne.roster[v]; });
+        });
+      }
+      if (mode !== 'replace' && pack.exams.length) {
+        var inPack = pack.exams.map(function (e) { return e.id; });
+        var kept = S.exams.filter(function (x) { return inPack.indexOf(x.id) >= 0 || x.results.length || Object.keys(x.keys).length; });
+        if (kept.length) S.exams = kept;
+        S.cur = pack.exams[0].id;
+      }
+      pack.exams.forEach(function (e) { nEx++; nRes += e.results.length; });
+      var imgs = pack.images || {}, nImg = 0, ids = Object.keys(imgs);
+      for (var i = 0; i < ids.length; i++) { var b = dataUrlToBlob(imgs[ids[i]]); if (b) { await imgPut(ids[i], b); nImg++; } }
+      save(); ui.restoreMode = null; ui.confirmReplace = false;
+      ui.dlMsg = 'Đã khôi phục ' + nEx + ' bài kiểm tra, ' + nRes + ' bài đã chấm, ' + nImg + ' ảnh phiếu (' + (mode === 'replace' ? 'thay thế toàn bộ' : 'gộp thêm') + ').';
+      render();
+    } catch (e) { ui.restoreMode = null; ui.confirmReplace = false; ui.dlMsg = 'Không khôi phục được: ' + (e && e.message ? e.message : 'file lỗi') + ' Dữ liệu hiện tại không bị thay đổi.'; render(); }
+  }
+  function backupCard() {
+    var h = '<div class="card"><b>Sao lưu và khôi phục</b><div class="small muted" style="margin:6px 0 10px">Lưu toàn bộ bài đã chấm ra một file trên máy, để chuyển sang máy khác hoặc phòng khi mất dữ liệu trình duyệt.</div>' +
+      '<div class="grid2"><label class="f">Phạm vi<select id="bkScope"><option value="all"' + (ui.bkScope !== 'cur' ? ' selected' : '') + '>Tất cả bài kiểm tra</option><option value="cur"' + (ui.bkScope === 'cur' ? ' selected' : '') + '>Chỉ bài đang chọn</option></select></label>' +
+      '<label class="f">Ảnh phiếu<select id="bkImg"><option value="1"' + (ui.bkImg !== false ? ' selected' : '') + '>Kèm ảnh (file nặng hơn)</option><option value="0"' + (ui.bkImg === false ? ' selected' : '') + '>Không kèm ảnh</option></select></label></div>' +
+      '<div class="row" style="margin-top:10px"><button class="btn primary" data-act="backup">Sao lưu về máy</button><button class="btn" data-act="restoremerge">Khôi phục (gộp thêm)</button>' +
+      (ui.confirmReplace ? '<button class="btn danger" data-act="restorereplace">Bấm lần nữa: thay thế toàn bộ</button><button class="btn" data-act="restorecancel">Hủy</button>' : '<button class="btn" data-act="restorereplace">Khôi phục (thay thế)</button>') + '</div>' +
+      (ui.confirmReplace ? '<div class="banner warn" style="margin-top:10px">Thay thế sẽ xóa dữ liệu hiện có trên máy này và thay bằng nội dung file sao lưu.</div>' : '') +
+      '<input type="file" id="inRestore" accept=".json,application/json" hidden></div>';
+    if (ui.dlMsg) h += '<div class="banner info">' + esc(ui.dlMsg) + '</div>';
+    return h;
+  }
+
   /* ---------- Tab: Kết quả ---------- */
   function resultRows(ex) {
     return ex.results.map(function (r) { return { r: r, g: grade(ex, r) }; });
@@ -832,7 +893,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function viewRes() {
     var ex = cur(), rows = resultRows(ex), h = '';
     if (!rows.length) {
-      return '<div class="card flat"><b>Chưa có bài nào được chấm.</b><div class="small muted" style="margin-top:6px">Vào tab Chấm bài, chụp phiếu của sinh viên rồi bấm Lưu. Kết quả sẽ hiện ở đây kèm thống kê và nút xuất Excel.</div></div>';
+      return '<div class="card flat"><b>Chưa có bài nào được chấm.</b><div class="small muted" style="margin-top:6px">Vào tab Chấm bài, chụp phiếu của sinh viên rồi bấm Lưu. Kết quả sẽ hiện ở đây kèm thống kê và nút xuất Excel.</div></div>' + backupCard();
     }
     var scored = rows.filter(function (x) { return x.g; }), sc = scored.map(function (x) { return x.g.score; });
     var avg = sc.length ? sc.reduce(function (a, b) { return a + b; }, 0) / sc.length : 0;
@@ -846,6 +907,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Tỷ lệ làm đúng từng câu</b><span class="small muted" id="hard"></span></div><svg id="chQ" class="chart" viewBox="0 0 600 190"></svg></div>';
     h += '<div class="row"><button class="btn primary" data-act="xlsx">Xuất Excel</button><button class="btn" data-act="csv">Xuất CSV</button><button class="btn" data-act="roster">Danh sách lớp</button></div>';
     if (ui.dlMsg) h += '<div class="banner info">' + esc(ui.dlMsg) + '</div>';
+    h += backupCard().replace(/<div class="banner info">[\s\S]*$/, '');
     if (ui.rosterOpen) {
       var txt = Object.keys(ex.roster).map(function (k) { return k + ', ' + ex.roster[k]; }).join('\n');
       h += '<div class="card"><label class="f">Danh sách lớp: mỗi dòng một học sinh, dạng "ID, Họ tên"<textarea id="rosterTxt" spellcheck="false" placeholder="12345, Nguyễn Văn A">' + esc(txt) + '</textarea></label><div class="row" style="margin-top:10px"><button class="btn primary" data-act="rostersave">Lưu danh sách</button><button class="btn" data-act="roster">Đóng</button></div></div>';
@@ -940,7 +1002,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var dl = await getDl();
     if (!dl) {
       try {
-        var blob = data instanceof Blob ? data : new Blob([data], { type: /\.csv$/.test(filename) ? 'text/csv;charset=utf-8' : /\.xlsx$/.test(filename) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream' });
+        var blob = data instanceof Blob ? data : new Blob([data], { type: /\.csv$/.test(filename) ? 'text/csv;charset=utf-8' : /\.json$/.test(filename) ? 'application/json' : /\.xlsx$/.test(filename) ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream' });
         var url = URL.createObjectURL(blob), an = document.createElement('a');
         an.href = url; an.download = filename; document.body.appendChild(an); an.click(); an.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
@@ -1069,6 +1131,10 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         ex.keys[ui.kver] = nk; if (toks.length > ex.n) { ex.n = Math.min(50, toks.length); }
         save(); render(); toast('Đã áp dụng ' + toks.length + ' câu'); break;
       case 'adv': ui.adv = !ui.adv; render(); break;
+      case 'backup': doBackup(); break;
+      case 'restoremerge': ui.restoreMode = 'merge'; ui.confirmReplace = false; $('#inRestore').click(); break;
+      case 'restorereplace': if (!ui.confirmReplace) { ui.confirmReplace = true; render(); } else { ui.restoreMode = 'replace'; $('#inRestore').click(); } break;
+      case 'restorecancel': ui.confirmReplace = false; render(); break;
       case 'ptsall':
         var pv2 = parseFloat(String($('#ptsAll').value).replace(',', '.'));
         if (isNaN(pv2) || pv2 < 0) { toast('Điểm mỗi câu không hợp lệ'); break; }
@@ -1104,6 +1170,9 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (t.id === 'exName') { ex.name = t.value.trim() || ex.name; save(); renderChrome(); return; }
     if (t.id === 'exN') { var n = Math.max(1, Math.min(50, Math.round(+t.value || 50))); ex.n = n; save(); render(); return; }
     if (t.id === 'exScale') { var sv = +t.value; if (sv > 0) { ex.scale = sv; save(); render(); } return; }
+    if (t.id === 'bkScope') { ui.bkScope = t.value; return; }
+    if (t.id === 'bkImg') { ui.bkImg = t.value === '1'; return; }
+    if (t.id === 'inRestore') { var rf = t.files && t.files[0]; t.value = ''; if (rf) doRestore(rf, ui.restoreMode || 'merge'); return; }
     if (t.id === 'exPartial') { ex.partial = t.value; save(); return; }
     if (t.id === 'rvSt' && ui.review) { ui.review.st = t.value; return; }
     if (t.id === 'rsQ') { ui.q = t.value; render(); return; }
