@@ -1171,13 +1171,17 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     }
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Phân bố điểm</b><span class="small muted">Số bài theo khoảng điểm</span></div><svg id="chHist" class="chart" viewBox="0 0 600 170"></svg></div>';
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Tỷ lệ làm đúng từng câu</b><span class="small muted" id="hard"></span></div><svg id="chQ" class="chart" viewBox="0 0 600 190"></svg></div>';
+    var m1 = h.length;
     h += '<div class="row"><button class="btn primary" data-act="xlsx">Xuất Excel</button><button class="btn" data-act="csv">Xuất CSV</button><button class="btn" data-act="roster">Danh sách lớp</button></div>';
     if (ui.dlMsg) h += '<div class="banner info">' + esc(ui.dlMsg) + '</div>';
+    var m2 = h.length;
     h += backupCard().replace(/<div class="banner info">[\s\S]*$/, '');
+    var m3 = h.length;
     if (ui.rosterOpen) {
       var txt = Object.keys(ex.roster).map(function (k) { return k + ', ' + ex.roster[k]; }).join('\n');
       h += '<div class="card"><label class="f">Danh sách lớp: mỗi dòng một học sinh, dạng "ID, Họ tên"<textarea id="rosterTxt" spellcheck="false" placeholder="12345, Nguyễn Văn A">' + esc(txt) + '</textarea></label><div class="row" style="margin-top:10px"><button class="btn primary" data-act="rostersave">Lưu danh sách</button><button class="btn" data-act="roster">Đóng</button></div></div>';
     }
+    var m4 = h.length;
     var dups = {}; rows.forEach(function (x) { if (x.r.sid) dups[x.r.sid] = (dups[x.r.sid] || 0) + 1; });
     var hasRoster = Object.keys(ex.roster).length > 0;
     rows.forEach(function (x, i) {
@@ -1215,7 +1219,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     });
     if (!list.length) h += '<tr><td colspan="4" class="muted">Không có bài nào phù hợp.</td></tr>';
     h += '</tbody></table></div>';
-    return h;
+    return h.slice(m4) + h.slice(m1, m2) + h.slice(m3, m4) + h.slice(0, m1) + h.slice(m2, m3);
   }
 
   function drawCharts() {
