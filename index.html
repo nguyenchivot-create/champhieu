@@ -172,7 +172,12 @@ body.inrev .tabs, body.inrev .top { display: none; }
 .tbl td { padding: 9px 8px; border-bottom: 1px solid var(--line); }
 .tbl tr.rw { cursor: pointer; }
 .tbl tr.rw:hover { background: var(--bg); }
-.tbl .num { text-align: right; font-family: var(--mono); }
+.tbl .num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.tbl td, .tbl th { padding-left: 6px; padding-right: 6px; }
+.tbl td:first-child { width: 1%; }
+.tbl td .btn.sm { padding: 0 10px; min-width: 48px; }
+.tbl .nmimg { max-width: 100%; }
+.card.scroll { padding: 8px; }
 .tbl th.num { font-family: inherit; }
 .scroll { overflow-x: auto; }
 .chart { width: 100%; height: auto; display: block; }
@@ -1183,14 +1188,14 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     h += '<div class="card"><div class="grid2"><label class="f">Tìm theo ID hoặc tên<input type="search" id="rsQ" value="' + esc(ui.q) + '" placeholder="Gõ rồi bấm Enter"></label>' +
       '<label class="f">Sắp xếp<select id="rsSort">' + [['scan', 'Theo thứ tự quét'], ['id', 'Theo ID'], ['name', 'Theo họ tên'], ['hi', 'Điểm cao đến thấp'], ['lo', 'Điểm thấp đến cao']].map(function (o) { return '<option value="' + o[0] + '"' + (ui.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>' +
       '<label class="f" style="margin-top:10px">Hiển thị<select id="rsFilt">' + [['all', 'Tất cả ' + rows.length + ' bài'], ['flag', 'Bài cần kiểm tra (' + nflag + ')'], ['checked', 'Bài đã duyệt']].map(function (o) { return '<option value="' + o[0] + '"' + (ui.filt === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
-    h += '<div class="card scroll"><table class="tbl"><thead><tr><th>#</th><th>ID / Họ tên</th><th>Mã đề</th><th class="num">Đúng</th><th class="num">Điểm</th><th></th></tr></thead><tbody>';
+    h += '<div class="card scroll"><table class="tbl"><thead><tr><th>#</th><th>ID / Họ tên / Mã đề</th><th class="num">Điểm</th><th></th></tr></thead><tbody>';
     list.forEach(function (x) {
       var r = x.r, i = x.i, nm = x.name;
-      h += '<tr class="rw" data-open="' + r.id + '"><td class="muted">' + (i + 1) + '</td><td>' + (r.sid ? '<span class="mono">' + esc(r.sid) + '</span>' : '<span class="muted">Không có ID</span>') + (r.st === 'checked' ? ' <span class="chip on">đã duyệt</span>' : '') + (nm ? '<div class="small muted">' + esc(nm) + '</div>' : (r.nm ? '<img class="nmimg" data-nm="' + r.id + '" alt="Tên viết tay">' : '')) + (x.flags.length ? '<div style="margin-top:3px">' + x.flags.map(function (f) { return '<span class="chip warn">' + esc(f) + '</span>'; }).join(' ') + '</div>' : '') + '</td><td>' + (r.ver ? r.ver : (x.g ? '<span class="muted" title="Không tô mã đề, chấm theo mã mặc định">(' + x.g.usedVer + ')</span>' : '<span class="muted">-</span>')) + '</td>' +
-        '<td class="num">' + (x.g ? x.g.ok + '/' + x.g.tot : '-') + '</td><td class="num"><b>' + (x.g ? fmt(x.g.score) : '-') + '</b></td>' +
+      h += '<tr class="rw" data-open="' + r.id + '"><td class="muted">' + (i + 1) + '</td><td>' + (r.sid ? '<span class="mono">' + esc(r.sid) + '</span>' : '<span class="muted">Không có ID</span>') + (r.st === 'checked' ? ' <span class="chip on">đã duyệt</span>' : '') + (nm ? '<div class="small muted">' + esc(nm) + '</div>' : (r.nm ? '<img class="nmimg" data-nm="' + r.id + '" alt="Tên viết tay">' : '')) + (x.flags.length ? '<div style="margin-top:3px">' + x.flags.map(function (f) { return '<span class="chip warn">' + esc(f) + '</span>'; }).join(' ') + '</div>' : '') + '<div class="small muted" style="margin-top:3px">Mã đề ' + (r.ver ? esc(r.ver) : (x.g ? '(' + esc(x.g.usedVer) + ', chưa tô)' : '-')) + '</div></td>' +
+        '<td class="num"><b style="font-size:20px">' + (x.g ? fmt(x.g.score) : '-') + '</b><div class="small muted">' + (x.g ? x.g.ok + '/' + x.g.tot : '') + '</div></td>' +
         '<td>' + (ui.confirmDel === r.id ? '<button class="btn sm danger" data-del2="' + r.id + '">Xóa</button> <button class="btn sm" data-delno="1">Giữ</button>' : '<button class="btn sm" data-del="' + r.id + '" aria-label="Xóa bài">Xóa</button>') + '</td></tr>';
     });
-    if (!list.length) h += '<tr><td colspan="6" class="muted">Không có bài nào phù hợp.</td></tr>';
+    if (!list.length) h += '<tr><td colspan="4" class="muted">Không có bài nào phù hợp.</td></tr>';
     h += '</tbody></table></div>';
     return h;
   }
