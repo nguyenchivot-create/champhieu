@@ -141,6 +141,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 /* Kết quả */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
 .stat { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.stat.wide { grid-column: 1 / -1; }
 .stat b { display: block; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .stat span { font-size: 13px; color: var(--muted); }
 .tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -560,6 +561,15 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   var LET = ['A', 'B', 'C', 'D', 'E'];
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function passScore(ex) { return (ex.passPct == null ? 50 : ex.passPct) / 100 * ex.scale; }
+  function calcStats(sc, ex) {
+    var n = sc.length; if (!n) return null;
+    var a = sc.slice().sort(function (x, y) { return x - y; }), mean = a.reduce(function (u, v) { return u + v; }, 0) / n;
+    var med = n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+    var sd = n > 1 ? Math.sqrt(a.reduce(function (u, v) { return u + (v - mean) * (v - mean); }, 0) / (n - 1)) : 0;
+    var ps = passScore(ex), pass = a.filter(function (v) { return v >= ps - 1e-9; }).length;
+    return { n: n, mean: mean, median: med, sd: sd, min: a[0], max: a[n - 1], pass: pass, rate: pass / n, ps: ps };
+  }
   function fmt(n, d) { return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: d == null ? 2 : d }); }
 
   /* ---------- Dữ liệu (lưu trong trình duyệt của máy này) ---------- */
@@ -921,6 +931,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       [10, 100].map(function (s) { return '<button class="chip' + (ex.scale === s ? ' on' : '') + '" data-scale="' + s + '">' + s + '</button>'; }).join('') +
       '<input type="number" id="exScale" min="1" max="1000" step="any" value="' + ex.scale + '" inputmode="decimal" style="width:90px;min-height:0;padding:3px 8px" aria-label="Thang điểm khác"></div>' +
       '<span class="small muted" style="margin-top:4px">Điểm = tổng điểm đạt / tổng điểm tối đa x thang điểm. Câu bỏ trống trong đáp án không tính.</span></div>' +
+      '<label class="f" style="margin-top:12px">Điểm đạt (từ mức này trở lên tính là đạt, dùng cho Tỷ lệ đạt)<input type="number" id="exPass" min="0" step="any" inputmode="decimal" value="' + (Math.round(passScore(ex) * 100) / 100) + '"></label>' +
       '<label class="f" style="margin-top:12px">Điểm từng phần (cho câu có đáp án từ 2 chữ cái trở lên)<select id="exPartial">' +
       [['none', 'Không (phải tô đúng hết mới có điểm)'], ['standard', 'Tiêu chuẩn của ZipGrade (đúng + bỏ đúng) / 5'], ['proportional', 'Tỷ lệ của ZipGrade (phạt tô thừa, bỏ trống 0 điểm)']].map(function (o) { return '<option value="' + o[0] + '"' + (ex.partial === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' +
       '<div class="f" style="margin-top:12px"><span>Điểm mỗi câu (áp dụng cho cả ' + ex.n + ' câu)</span><div class="row" style="margin-top:6px"><input type="number" id="ptsAll" min="0" step="any" inputmode="decimal" value="' + (Math.round(ex.scale / ex.n * 10000) / 10000) + '" style="width:100px"><button class="btn sm primary" data-act="ptsall">Áp dụng</button></div>' +
@@ -1015,12 +1026,15 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       return '<div class="card flat"><b>Chưa có bài nào được chấm.</b><div class="small muted" style="margin-top:6px">Vào tab Chấm bài, chụp phiếu của sinh viên rồi bấm Lưu. Kết quả sẽ hiện ở đây kèm thống kê và nút xuất Excel.</div></div>' + backupCard();
     }
     var scored = rows.filter(function (x) { return x.g; }), sc = scored.map(function (x) { return x.g.score; });
-    var avg = sc.length ? sc.reduce(function (a, b) { return a + b; }, 0) / sc.length : 0;
+    var st = calcStats(sc, ex), dash = function (v) { return st ? v : '-'; };
     h += '<div class="card"><div class="stats">' +
       '<div class="stat"><b>' + rows.length + '</b><span>Số bài</span></div>' +
-      '<div class="stat"><b>' + (sc.length ? fmt(avg) : '-') + '</b><span>Điểm trung bình</span></div>' +
-      '<div class="stat"><b>' + (sc.length ? fmt(Math.max.apply(null, sc)) : '-') + '</b><span>Cao nhất</span></div>' +
-      '<div class="stat"><b>' + (sc.length ? fmt(Math.min.apply(null, sc)) : '-') + '</b><span>Thấp nhất</span></div></div>' +
+      '<div class="stat"><b>' + dash(st && fmt(st.mean)) + '</b><span>Trung bình (Mean)</span></div>' +
+      '<div class="stat"><b>' + dash(st && fmt(st.median)) + '</b><span>Trung vị (Median)</span></div>' +
+      '<div class="stat"><b>' + dash(st && fmt(st.sd)) + '</b><span>Độ lệch chuẩn (SD)</span></div>' +
+      '<div class="stat"><b>' + dash(st && fmt(st.min)) + '</b><span>Thấp nhất (Min)</span></div>' +
+      '<div class="stat"><b>' + dash(st && fmt(st.max)) + '</b><span>Cao nhất (Max)</span></div>' +
+      '<div class="stat wide"><b>' + dash(st && (fmt(Math.round(st.rate * 1000) / 10) + '%')) + '</b><span>Tỷ lệ đạt (Pass rate)' + (st ? ': ' + st.pass + ' / ' + st.n + ' bài từ ' + fmt(st.ps) + ' điểm trở lên' : '') + '</span></div></div>' +
       (rows.length > scored.length ? '<div class="small muted" style="margin-top:8px">' + (rows.length - scored.length) + ' bài chưa có điểm vì thiếu mã đề hoặc đáp án.</div>' : '') + '</div>';
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Phân bố điểm</b><span class="small muted">Số bài theo khoảng điểm</span></div><svg id="chHist" class="chart" viewBox="0 0 600 170"></svg></div>';
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Tỷ lệ làm đúng từng câu</b><span class="small muted" id="hard"></span></div><svg id="chQ" class="chart" viewBox="0 0 600 190"></svg></div>';
@@ -1153,6 +1167,10 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var kh = ['Mã đề']; for (i = 1; i <= ex.n; i++) kh.push('Câu ' + i);
     var kr = [kh]; LET.forEach(function (L) { if (ex.keys[L]) kr.push([L].concat(ex.keys[L].slice(0, ex.n).map(function (x) { return x || '-'; }))); });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kr), 'Đáp án');
+    var scs = ex.results.map(function (r) { return grade(ex, r); }).filter(function (g) { return g; }).map(function (g) { return g.score; }), cs = calcStats(scs, ex);
+    var sm = [['Chỉ số', 'Giá trị'], ['Số bài đã chấm', ex.results.length], ['Số bài có điểm', scs.length]];
+    if (cs) sm.push(['Trung bình (Mean)', Math.round(cs.mean * 100) / 100], ['Trung vị (Median)', Math.round(cs.median * 100) / 100], ['Độ lệch chuẩn (SD, mẫu n-1)', Math.round(cs.sd * 100) / 100], ['Thấp nhất (Min)', cs.min], ['Cao nhất (Max)', cs.max], ['Điểm đạt', Math.round(cs.ps * 100) / 100], ['Số bài đạt', cs.pass], ['Tỷ lệ đạt (Pass rate)', Math.round(cs.rate * 1000) / 1000]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sm), 'Tổng quan');
     var st = [['Câu', 'Số bài có đáp án', 'Số bài đúng', 'Tỷ lệ đúng']];
     for (i = 0; i < ex.n; i++) {
       var tot = 0, ok = 0;
@@ -1434,6 +1452,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (t.id === 'thr') { S.thr = +t.value; save(); var lb = t.closest('label'); lb.firstChild.nodeValue = 'Độ nhạy khi đọc ô tô: ' + fmt(S.thr, 2); return; }
     if (t.id === 'exName') { ex.name = t.value.trim() || ex.name; save(); renderChrome(); return; }
     if (t.id === 'exN') { var n = Math.max(1, Math.min(50, Math.round(+t.value || 50))); ex.n = n; save(); render(); return; }
+    if (t.id === 'exPass') { var pv = +t.value; if (t.value !== '' && pv >= 0 && ex.scale > 0) { ex.passPct = Math.min(100, pv / ex.scale * 100); save(); } return; }
     if (t.id === 'exScale') { var sv = +t.value; if (sv > 0) { ex.scale = sv; save(); render(); } return; }
     if (t.id === 'bkScope') { ui.bkScope = t.value; return; }
     if (t.id === 'bkImg') { ui.bkImg = t.value === '1'; return; }
