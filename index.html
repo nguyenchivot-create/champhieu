@@ -108,6 +108,24 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .rvnav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .rvnav .btn { flex: 0 0 auto; min-width: 104px; font-size: 17px; }
 .rvnav .rvpos { font-weight: 700; font-variant-numeric: tabular-nums; }
+body.inrev .tabs, body.inrev .top { display: none; }
+.review { gap: 12px; }
+.review #rvScore { text-align: center; }
+.review .scorebox { justify-content: center; flex-direction: column; align-items: center; gap: 4px; }
+.review .score { font-size: 40px; }
+.review .scorebox .small, .review .scorebox > div:not(.score) { font-size: 15px; }
+.rvmeta { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.rvmeta .rvf { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: row; gap: 10px; }
+.rvmeta .rvf .f { flex: 1; min-width: 0; }
+.rvmeta .nmimg { flex: 1 1 100%; width: auto; min-width: 0; height: auto; max-height: 96px; margin: 0; object-fit: contain; object-position: left center; }
+.rvmeta .nmimg[hidden] { display: none; }
+.rvbar { position: sticky; bottom: 0; z-index: 25; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); margin: 4px -16px -16px; border-radius: 0 0 12px 12px; }
+.rvseg { display: flex; flex: 1; max-width: 360px; background: var(--bg); border: 1px solid var(--edge); border-radius: 12px; padding: 3px; gap: 3px; }
+.rvseg button { flex: 1; border: 0; background: transparent; min-height: 48px; border-radius: 9px; font-weight: 700; font-size: 16px; color: var(--muted); }
+.rvseg button.on { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+.rvarrow { flex: 0 0 54px; min-height: 54px; border: 0; background: transparent; color: var(--accent); font-size: 38px; font-weight: 800; line-height: 1; }
+.rvarrow[disabled] { opacity: 0.25; }
+.rvpane[hidden] { display: none; }
 .review .shot { touch-action: pan-y; }
 .qgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 @media (min-width: 560px) { .qgrid { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
@@ -680,6 +698,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 
   function render() {
     renderChrome();
+    document.body.classList.toggle('inrev', !!(ui.review && ui.tab === 'scan'));
     var v = $('#view');
     if (ui.tab === 'scan') v.innerHTML = viewScan();
     else if (ui.tab === 'key') v.innerHTML = viewKey();
@@ -715,23 +734,19 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       var rs = ex.results.filter(function (x) { return x.id === id; })[0]; if (!rs) return;
       ui.review = { mode: 'grade', editId: rs.id, fname: '', idx: 1, total: 1, base: null, res: { unsure: [], answers: [] }, ans: rs.ans.slice(), sid: rs.sid, idUnsure: false, ver: rs.ver, warn: '', st: rs.st || '', hist: rs.hist || [] };
       if (rs.nm) imgGet('n_' + rs.id).then(function (b) { if (b && ui.review && ui.review.editId === rs.id) { ui.review.nameUrl = URL.createObjectURL(b); var el = document.getElementById('rvNmImg'); if (el) { el.src = ui.review.nameUrl; el.hidden = false; } } });
-      imgGet(rs.id).then(function (b) { if (b && ui.review && ui.review.editId === rs.id) { ui.review.imgUrl = URL.createObjectURL(b); render(); } });
+      imgGet(rs.id).then(function (b) {
+        if (!b || !ui.review || ui.review.editId !== rs.id) return;
+        var u = URL.createObjectURL(b);
+        if (rs.rc) { var im2 = new Image(); im2.onload = function () { if (ui.review && ui.review.editId === rs.id) { ui.review.rectSrc = im2; render(); } }; im2.src = u; }
+        else { ui.review.imgUrl = u; render(); }
+      });
     ui.tab = 'scan'; render(); window.scrollTo(0, 0);
-  }
-  function navBar(pos) {
-    var r = ui.review, ord = ui.order || [], k = r && r.editId ? ord.indexOf(r.editId) : -1;
-    if (k < 0 || ord.length < 2) return '';
-    return '<div class="rvnav' + (pos ? ' ' + pos : '') + '"><button class="btn" data-act="rvnav" data-dir="-1"' + (k <= 0 ? ' disabled' : '') + ' aria-label="Bài trước">\u2039 Trước</button><span class="rvpos">' + (k + 1) + ' / ' + ord.length + '</span><button class="btn" data-act="rvnav" data-dir="1"' + (k >= ord.length - 1 ? ' disabled' : '') + ' aria-label="Bài sau">Sau \u203a</button></div>';
   }
   function reviewNav(dir) {
     var r = ui.review, ex = cur(), ord = ui.order || [];
     if (!r || !r.editId || r.mode === 'key') return;
     var k = ord.indexOf(r.editId), t = ord[k + dir]; if (k < 0 || !t) return;
-    var rs = ex.results.filter(function (x) { return x.id === r.editId; })[0], dirty = !rs, q2;
-    if (rs) {
-      for (q2 = 0; q2 < ex.n; q2++) if ((rs.ans[q2] || '') !== (r.ans[q2] || '')) dirty = true;
-      if ((rs.sid || '') !== (r.sid || '').trim() || (rs.ver || '') !== (r.ver || '') || (rs.st || '') !== (r.st || '')) dirty = true;
-    }
+    var dirty = reviewDirty();
     if (dirty) { ui.navTo = t; var sb = document.querySelector('[data-act=saveres]'); if (sb) sb.click(); }
     else openResult(t);
   }
@@ -745,24 +760,34 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (!ui.review || !ui.review.editId || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target || {}).tagName || '')) return;
     if (e.key === 'ArrowRight') reviewNav(1); else if (e.key === 'ArrowLeft') reviewNav(-1);
   });
+  function reviewDirty() {
+    var r = ui.review, ex = cur(); if (!r || !r.editId) return false;
+    var rs = ex.results.filter(function (x) { return x.id === r.editId; })[0]; if (!rs) return false;
+    for (var q2 = 0; q2 < ex.n; q2++) if ((rs.ans[q2] || '') !== (r.ans[q2] || '')) return true;
+    return (rs.sid || '') !== (r.sid || '').trim() || (rs.ver || '') !== (r.ver || '') || (rs.st || '') !== (r.st || '');
+  }
   function reviewShell() {
-    var r = ui.review;
-    var isKey = r.mode === 'key';
-    return '<div class="card review">' + navBar('top') +
-      '<div class="row" style="justify-content:space-between"><b>' + (isKey ? 'Phiếu đáp án (Key)' : (r.editId ? 'Sửa bài đã lưu' : 'Bài ' + (r.idx) + (r.total > 1 ? ' / ' + r.total : ''))) + '</b><span class="small muted">' + esc(r.fname || '') + '</span></div>' +
-      (!r.base && r.imgUrl ? '<img class="shot" alt="Phiếu gốc đã quét" src="' + r.imgUrl + '">' : '') +
-      (r.base ? '<canvas id="ov" class="shot" width="960" height="' + Math.round(960 * r.H / r.W) + '"></canvas>' : '') +
-      (r.warn ? '<div class="banner warn">' + esc(r.warn) + '</div>' : '') +
+    var r = ui.review, isKey = r.mode === 'key', tab = ui.rvTab || 'img', ord = ui.order || [], k = r.editId ? ord.indexOf(r.editId) : -1, hasNav = k >= 0 && ord.length > 1;
+    var head = '<div class="row" style="justify-content:space-between">' + (r.editId ? '<button class="btn sm" data-act="rvback">‹ Kết quả</button>' : '<b>' + (isKey ? 'Phiếu đáp án (Key)' : 'Bài ' + r.idx + (r.total > 1 ? ' / ' + r.total : '')) + '</b>') + '<span class="small muted">' + (hasNav ? (k + 1) + ' / ' + ord.length : esc(r.fname || '')) + '</span></div>';
+    var imgHtml = r.rectSrc ? '<canvas id="ov" class="shot" width="' + RG.W + '" height="' + Math.round((RG.y1 - RG.y0) * RG.W / (RG.x1 - RG.x0)) + '"></canvas>'
+      : (r.imgUrl ? '<img class="shot" alt="Phiếu gốc đã quét" src="' + r.imgUrl + '">' : (r.editId ? '<div class="small muted">Chưa có ảnh phiếu cho bài này.</div>' : ''));
+    var btns = '<div class="row" id="rvBtns"></div>';
+    function pane(n, inner) { return '<div class="rvpane" data-pane="' + n + '"' + (tab === n ? '' : ' hidden') + '>' + inner + '</div>'; }
+    return '<div class="card review">' + head + (r.editId ? '' : btns) +
       '<div id="rvScore"></div>' +
-      '<div class="grid2"><label class="f">' + (isKey ? 'Mã đề của đáp án' : 'ID học sinh (5 chữ số)') + (isKey ? '<select class="in" id="rvVer"></select>' : '<input type="text" id="rvId" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="Không tô, vẫn lưu được">') + '</label>' +
-      (isKey ? '' : '<label class="f">Mã đề (Key Version)<select class="in" id="rvVer"></select></label>') + '</div>' +
-      '<img id="rvNmImg" class="nmimg" alt="Tên viết tay" style="width:100%;height:56px"' + (r.nameUrl ? ' src="' + r.nameUrl + '"' : ' hidden') + '>' +
+      '<div class="rvmeta"><div class="rvf">' +
+      (isKey ? '<label class="f">Mã đề của đáp án<select class="in" id="rvVer"></select></label>'
+        : '<label class="f">ID<input type="text" id="rvId" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="Không tô, vẫn lưu được"></label><label class="f">Mã đề (Key)<select class="in" id="rvVer"></select></label>') +
+      '</div><img id="rvNmImg" class="nmimg" alt="Tên viết tay"' + (r.nameUrl ? ' src="' + r.nameUrl + '"' : ' hidden') + '></div>' +
       '<div id="rvName" class="small muted"></div>' +
-      (isKey ? '' : '<label class="f">Trạng thái bài<select class="in" id="rvSt"><option value="">Chưa duyệt</option><option value="checked">Đã duyệt</option><option value="review">Cần kiểm tra lại</option></select></label>') +
-      '<div class="legend"><span><b style="color:var(--ok)">\u2713</b> Đúng</span><span><b style="color:var(--bad)">\u2717</b> Sai</span><span><b style="color:var(--warn)">\u00bd</b> Đúng một phần</span><span><b style="color:var(--warn)">?</b> Máy chưa chắc, nên kiểm tra</span><span>Chạm một ô để đổi đáp án</span></div>' +
-      '<div id="rvHist" class="small muted"></div>' +
-      '<div class="qgrid" id="rvGrid"></div>' +
-      '<div class="row" id="rvBtns"></div>' + navBar('bot') + '</div>';
+      (r.warn ? '<div class="banner warn">' + esc(r.warn) + '</div>' : '') +
+      pane('img', imgHtml) +
+      pane('q', '<div class="legend"><span><b style="color:var(--ok)">✓</b> Đúng</span><span><b style="color:var(--bad)">✗</b> Sai</span><span><b style="color:var(--warn)">½</b> Đúng một phần</span><span><b style="color:var(--warn)">?</b> Máy chưa chắc, nên kiểm tra</span></div><div class="small muted">Chạm một ô để đổi đáp án.</div><div class="qgrid" id="rvGrid"></div>') +
+      pane('det', (isKey ? '' : '<label class="f">Trạng thái bài<select class="in" id="rvSt"><option value="">Chưa duyệt</option><option value="checked">Đã duyệt</option><option value="review">Cần kiểm tra lại</option></select></label>') + '<div id="rvTags"></div><div id="rvHist" class="small muted"></div>') +
+      (r.editId ? btns : '') +
+      '<div class="rvbar">' + (hasNav ? '<button class="rvarrow" data-act="rvnav" data-dir="-1"' + (k <= 0 ? ' disabled' : '') + ' aria-label="Bài trước">‹</button>' : '') +
+      '<div class="rvseg">' + [['img', 'Ảnh'], ['q', 'Câu hỏi'], ['det', 'Chi tiết']].map(function (t) { return '<button data-rvt="' + t[0] + '" class="' + (tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+      (hasNav ? '<button class="rvarrow" data-act="rvnav" data-dir="1"' + (k >= ord.length - 1 ? ' disabled' : '') + ' aria-label="Bài sau">›</button>' : '') + '</div></div>';
   }
 
   function refreshReview(full) {
@@ -794,6 +819,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       if (r.mode !== 'key' && !r.sid) wn.push('<span style="color:var(--warn)">Chưa có ID, bài vẫn lưu được.</span>');
       nm.innerHTML = wn.join(' ');
       var sts = $('#rvSt'); if (sts && full) sts.value = r.st || '';
+      var tg = $('#rvTags');
+      if (tg) { var tp = r.mode === 'key' ? [] : tagPcts(ex, key, r.ans), thr = tagPct(ex) / 100; tg.innerHTML = tp.length ? '<b>Điểm theo thẻ năng lực</b><div class="small" style="margin-top:6px;display:flex;flex-direction:column;gap:4px">' + tp.map(function (x) { return '<div>' + esc(x.name) + ': <b>' + (x.pct == null ? '-' : fmt(Math.round(x.pct * 1000) / 10) + '%') + '</b> ' + (x.pct == null ? '' : x.pct >= thr - 1e-9 ? '<span style="color:var(--ok)">\u2713 đạt</span>' : '<span style="color:var(--bad)">\u2717 chưa đạt</span>') + '</div>'; }).join('') + '</div>' : ''; }
       var hh = $('#rvHist'); if (hh) hh.innerHTML = r.hist && r.hist.length ? '<b>Lịch sử chỉnh sửa</b><br>' + r.hist.slice(-6).map(function (x) { return esc(new Date(x.ts).toLocaleString('vi-VN') + ': ' + x.c.join('; ')); }).join('<br>') : '';
     }
     var cells = '';
@@ -815,19 +842,17 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888'; }
   function drawOverlay() {
     var r = ui.review, cv = $('#ov');
-    if (!r || !r.base || !cv) return;
-    var ctx = cv.getContext('2d'), k = cv.width / r.W, ex = cur();
-    ctx.drawImage(r.base, 0, 0, cv.width, cv.height);
-    var H = r.res.H, rad = LAYOUT.bubbleR * r.res.pxPerPt * k;
+    if (!r || !r.rectSrc || !cv) return;
+    var ctx = cv.getContext('2d'), k = cv.width / (RG.x1 - RG.x0), ex = cur();
+    ctx.drawImage(r.rectSrc, 0, 0, cv.width, cv.height);
+    var rad = LAYOUT.bubbleR * k;
     var cOk = cssVar('--ok'), cBad = cssVar('--bad'), cWarn = cssVar('--warn'), cAcc = '#4da3ff';
     var key = r.mode === 'key' ? null : ex.keys[r.ver || defaultVer(ex)];
-    function P(pt) { var p = OMR.applyH(H, pt[0], pt[1]); return [p[0] * k, p[1] * k]; }
+    function P(pt) { return [(pt[0] - RG.x0) * k, (pt[1] - RG.y0) * k]; }
     function ring(pt, color, scale, dash) {
       var p = P(pt); ctx.beginPath(); ctx.arc(p[0], p[1], rad * scale, 0, 6.2832);
       ctx.lineWidth = Math.max(2, rad * 0.28); ctx.strokeStyle = color; ctx.setLineDash(dash ? [4, 3] : []); ctx.stroke(); ctx.setLineDash([]);
     }
-    ctx.lineWidth = 3; ctx.strokeStyle = cAcc;
-    r.res.markers.forEach(function (m) { ctx.strokeRect(m[0] * k - 9, m[1] * k - 9, 18, 18); });
     for (var i = 0; i < ex.n; i++) {
       var a = r.ans[i] || '';
       for (var j = 0; j < a.length; j++) {
@@ -918,6 +943,32 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function imgPut(id, blob) { return idbOp('readwrite', function (st) { return st.put(blob, id); }); }
   function imgGet(id) { return idbOp('readonly', function (st) { return st.get(id); }); }
   function imgDel(id) { return idbOp('readwrite', function (st) { return st.delete(id); }); }
+  var RG = { x0: 100, x1: 510, y0: 140, y1: 668, W: 980 };
+  function rectify(cv, H) {
+    var W = cv.width, HH = cv.height, w = RG.W, sc = w / (RG.x1 - RG.x0), h = Math.round((RG.y1 - RG.y0) * sc), x, y, i;
+    var d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, HH).data, g0 = new Uint8Array(W * HH);
+    for (i = 0; i < W * HH; i++) g0[i] = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8;
+    var out = document.createElement('canvas'); out.width = w; out.height = h;
+    var octx = out.getContext('2d'), im = octx.createImageData(w, h), dd = im.data, g = new Uint8Array(w * h);
+    for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
+      var pp = OMR.applyH(H, RG.x0 + (x + 0.5) / sc, RG.y0 + (y + 0.5) / sc), fx = pp[0] - 0.5, fy = pp[1] - 0.5, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+      var xa = Math.min(W - 1, Math.max(0, ix)), xb = Math.min(W - 1, Math.max(0, ix + 1)), ya = Math.min(HH - 1, Math.max(0, iy)), yb = Math.min(HH - 1, Math.max(0, iy + 1));
+      g[y * w + x] = g0[ya * W + xa] * (1 - tx) * (1 - ty) + g0[ya * W + xb] * tx * (1 - ty) + g0[yb * W + xa] * (1 - tx) * ty + g0[yb * W + xb] * tx * ty;
+    }
+    var hist = new Array(256).fill(0); for (i = 0; i < g.length; i++) hist[g[i]]++;
+    var acc = 0, paper = 255, k; for (k = 0; k < 256; k++) { acc += hist[k]; if (acc >= g.length * 0.88) { paper = Math.max(90, k); break; } }
+    for (i = 0; i < g.length; i++) { var v = Math.min(255, g[i] * 255 / paper); dd[i * 4] = dd[i * 4 + 1] = dd[i * 4 + 2] = v; dd[i * 4 + 3] = 255; }
+    octx.putImageData(im, 0, 0); return out;
+  }
+  function rectBlob(cv) { return new Promise(function (res) { try { cv.toBlob(function (b) { res(b); }, 'image/jpeg', 0.8); } catch (e) { res(null); } }); }
+  function tagPcts(ex, key, ans) {
+    var out = []; (ex.tags || []).forEach(function (t) {
+      var qs = (t.qs || []).filter(function (q) { return q < ex.n; }); if (!t.name || !qs.length) return;
+      var e = 0, m = 0; qs.forEach(function (q) { var sc = key && key[q] ? qScore(ex, key[q], ans[q], q) : null; if (sc) { e += sc.earn; m += sc.max; } });
+      out.push({ name: t.name, pct: m ? e / m : null });
+    });
+    return out;
+  }
   function thumb(cv) {
     return new Promise(function (res) { try { var s = Math.min(1, 1100 / Math.max(cv.width, cv.height)), c = document.createElement('canvas'); c.width = Math.round(cv.width * s); c.height = Math.round(cv.height * s); c.getContext('2d').drawImage(cv, 0, 0, c.width, c.height); c.toBlob(function (b) { res(b); }, 'image/jpeg', 0.6); } catch (e) { res(null); } });
   }
@@ -939,6 +990,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         mode: job.mode, fname: job.file.name, idx: job.idx, total: job.total, base: im.canvas, W: im.w, H: im.h, res: res,
         ans: res.answers.slice(), sid: res.id, idUnsure: res.idUnsure, ver: res.version, warn: warn, st: '', hist: []
       };
+      try { ui.review.rectSrc = rectify(im.canvas, res.H); } catch (e3) { ui.review.rectSrc = null; }
       (function (rv) { cropName(im.canvas, res.H).then(function (o) { rv.nameBlob = o.blob; rv.nameInk = o.ink; if (o.ink && o.blob) { rv.nameUrl = URL.createObjectURL(o.blob); var el = document.getElementById('rvNmImg'); if (el) { el.src = rv.nameUrl; el.hidden = false; } } }); })(ui.review);
     } catch (e) {
       ui.errs.push((job.file.name || 'Ảnh') + ': ' + e.message);
@@ -1368,7 +1420,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var rec = { id: 'r' + Date.now().toString(36) + Math.floor(Math.random() * 999), ts: Date.now(), sid: sid, ver: res.version, ans: ans, st: '', hist: [], uns: uns };
     var dup = sid && ex.results.filter(function (x) { return x.sid === sid; })[0];
     var nmo = await cropName(full.canvas, res.H); rec.nm = nmo.ink ? 1 : 0;
-    LV.last = { sig: sig }; LV.pending = { rec: rec, canvas: full.canvas, dupId: dup ? dup.id : null, nm: nmo };
+    LV.last = { sig: sig }; LV.pending = { rec: rec, canvas: full.canvas, H: res.H, dupId: dup ? dup.id : null, nm: nmo };
     if (!dup) liveCommit(false);
     LV.savedShape = shape; liveShow(rec, !!dup, res);
   }
@@ -1377,7 +1429,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (P.nm && P.nm.ink && P.nm.blob) imgPut('n_' + P.rec.id, P.nm.blob);
     if (overwrite && P.dupId) { imgDel(P.dupId); imgDel('n_' + P.dupId); ex.results = ex.results.filter(function (x) { return x.id !== P.dupId; }); }
     ex.results.push(P.rec); save();
-    thumb(P.canvas).then(function (b) { if (b) imgPut(P.rec.id, b); });
+    P.rec.rc = 1; rectBlob(rectify(P.canvas, P.H)).then(function (b) { if (b) imgPut(P.rec.id, b); });
     LV.count++; ui.sess++; LV.undoId = P.rec.id; LV.saved = true; lvCount();
   }
   function liveShow(rec, isDup, res) {
@@ -1414,7 +1466,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 
   /* ---------- Sự kiện ---------- */
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-scale],[data-tab],[data-act],[data-q],[data-kver],[data-k],[data-open],[data-del],[data-del2],[data-delno]');
+    var t = e.target.closest('[data-scale],[data-tab],[data-act],[data-q],[data-kver],[data-k],[data-open],[data-del],[data-del2],[data-delno],[data-rvt]');
     if (!t) return;
     var ex = cur(), d = t.dataset, r = ui.review, i;
     if (d.scale) { ex.scale = +d.scale; save(); render(); return; }
@@ -1423,6 +1475,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       i = +d.q; var a = r.ans[i] || '', idx = LET.indexOf(a), nx = idx + 1; if (idx < 0) nx = 0;
       r.ans[i] = nx <= 4 ? LET[nx] : ''; refreshReview(false); return;
     }
+    if (d.rvt) { ui.rvTab = d.rvt; render(); return; }
     if (d.kver) { ui.kver = d.kver; render(); return; }
     if (d.k !== undefined) {
       i = +d.k; if (!ex.keys[d.l] && false) return;
@@ -1443,7 +1496,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       case 'lib': $('#inLib').click(); break;
       case 'keyscan': $('#inKey').click(); break;
       case 'clearerr': ui.errs = []; render(); break;
-      case 'skip': ui.review = null; ui.busy = false; render(); processNext(); break;
+      case 'skip': var wasEdit = r && r.editId; ui.review = null; ui.busy = false; if (wasEdit) ui.tab = 'res'; render(); if (!wasEdit) processNext(); break;
+      case 'rvback':
+        if (r && r.editId && reviewDirty()) { var sb2 = document.querySelector('[data-act=saveres]'); if (sb2) sb2.click(); }
+        else { ui.review = null; ui.tab = 'res'; render(); window.scrollTo(0, 0); }
+        break;
       case 'rvnav':
         if (!r || !r.editId) break;
         reviewNav(+d.dir); break;
@@ -1457,7 +1514,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         if ((bs.ver || '') !== (rec.ver || '')) chg.push('mã đề: ' + (bs.ver || 'trống') + ' → ' + (rec.ver || 'trống'));
         rec.hist = (old0 && old0.hist ? old0.hist : []).slice(-20); if (chg.length) rec.hist.push({ ts: Date.now(), c: chg.slice(0, 40) });
         rec.uns = r.base ? r.res.unsure.filter(function (u, q2) { return u && r.ans[q2] === r.res.answers[q2]; }).length : 0;
-        if (r.base) { thumb(r.base).then(function (b) { if (b) imgPut(rec.id, b); }); ui.sess++; }
+        if (r.base) { (r.rectSrc ? rectBlob(r.rectSrc) : thumb(r.base)).then(function (b) { if (b) imgPut(rec.id, b); }); if (r.rectSrc) rec.rc = 1; ui.sess++; }
+        else if (old0 && old0.rc) rec.rc = 1;
         if (r.base && r.nameInk && r.nameBlob) { imgPut('n_' + rec.id, r.nameBlob); rec.nm = 1; } else if (old0 && old0.nm) rec.nm = 1;
         if (r.editId) { ex.results = ex.results.map(function (x) { return x.id === r.editId ? rec : x; }); }
         else {
