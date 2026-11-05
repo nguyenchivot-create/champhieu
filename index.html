@@ -103,6 +103,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .scorebox { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .score { font-size: 44px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .score small { font-size: 18px; color: var(--muted); font-weight: 600; }
+.tagrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.tagrow .btn { grid-column: 1 / -1; justify-self: start; }
 .rvnav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .rvnav .btn { flex: 0 0 auto; min-width: 104px; font-size: 17px; }
 .rvnav .rvpos { font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -150,6 +152,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .tbl tr.rw { cursor: pointer; }
 .tbl tr.rw:hover { background: var(--bg); }
 .tbl .num { text-align: right; font-family: var(--mono); }
+.tbl th.num { font-family: inherit; }
 .scroll { overflow-x: auto; }
 .chart { width: 100%; height: auto; display: block; }
 .chart text { fill: var(--muted); font-size: 11px; font-family: var(--font); }
@@ -561,6 +564,38 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   var LET = ['A', 'B', 'C', 'D', 'E'];
   var $ = function (s, r) { return (r || document).querySelector(s); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function parseRanges(txt, n) {
+    var out = [], seen = {};
+    String(txt || '').split(/[,;\s]+/).forEach(function (tok) {
+      var m = tok.match(/^(\d+)(?:\s*[-\u2013]\s*(\d+))?$/); if (!m) return;
+      var a = +m[1], b = m[2] ? +m[2] : a; if (a > b) { var t = a; a = b; b = t; }
+      for (var q = Math.max(1, a); q <= Math.min(n, b); q++) if (!seen[q]) { seen[q] = 1; out.push(q - 1); }
+    });
+    return out.sort(function (x, y) { return x - y; });
+  }
+  function rangesText(qs) {
+    var out = [], i = 0;
+    while (i < qs.length) { var j = i; while (j + 1 < qs.length && qs[j + 1] === qs[j] + 1) j++; out.push(j > i ? (qs[i] + 1) + '-' + (qs[j] + 1) : String(qs[i] + 1)); i = j + 1; }
+    return out.join(', ');
+  }
+  function tagPct(ex) { return ex.tagPct == null ? (ex.passPct == null ? 50 : ex.passPct) : ex.tagPct; }
+  function tagStats(ex) {
+    var tags = (ex.tags || []).filter(function (t) { return t.name && t.qs && t.qs.length; });
+    if (!tags.length) return null;
+    var thr = tagPct(ex) / 100, graded = ex.results.map(function (r) { return { r: r, k: keyFor(ex, r) }; }).filter(function (x) { return x.k; });
+    var rows = tags.map(function (t) {
+      var per = [], nq = 0;
+      t.qs.forEach(function (q) { if (graded.length && graded[0].k[q]) nq++; });
+      graded.forEach(function (x) {
+        var e = 0, m = 0; t.qs.forEach(function (q) { var qs = x.k[q] ? qScore(ex, x.k[q], x.r.ans[q], q) : null; if (qs) { e += qs.earn; m += qs.max; } });
+        per.push(m ? e / m : null);
+      });
+      var vals = per.filter(function (v) { return v != null; }), mean = vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
+      var ach = vals.filter(function (v) { return v >= thr - 1e-9; }).length;
+      return { name: t.name, nq: t.qs.length, n: vals.length, mean: mean, ach: ach, per: per };
+    });
+    return { rows: rows, thr: thr, results: graded.map(function (x) { return x.r; }) };
+  }
   function passScore(ex) { return (ex.passPct == null ? 50 : ex.passPct) / 100 * ex.scale; }
   function calcStats(sc, ex) {
     var n = sc.length; if (!n) return null;
@@ -578,7 +613,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function load() { try { var v = JSON.parse(localStorage.getItem(KEY)); if (v && v.exams && v.exams.length) return v; } catch (e) {} return null; }
   var S = load();
   if (!S) { var e0 = newExam('Bài kiểm tra 1'); S = { exams: [e0], cur: e0.id, thr: 0.3 }; }
-  function normEx(x) { if (!x.v2) { x.v2 = 1; x.partial = x.partial || 'none'; x.pts = x.pts || []; if (!x.results.length && x.scale === 10) x.scale = 100; } x.keys = x.keys || {}; x.results = x.results || []; x.roster = x.roster || {}; x.pts = x.pts || []; return x; }
+  function normEx(x) { if (!x.v2) { x.v2 = 1; x.partial = x.partial || 'none'; x.pts = x.pts || []; if (!x.results.length && x.scale === 10) x.scale = 100; } x.tags = Array.isArray(x.tags) ? x.tags : []; x.keys = x.keys || {}; x.results = x.results || []; x.roster = x.roster || {}; x.pts = x.pts || []; return x; }
   S.exams.forEach(normEx);
   var saveT = null;
   function save() { clearTimeout(saveT); saveT = setTimeout(function () { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 150); }
@@ -919,6 +954,21 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   }
 
   /* ---------- Tab: Đáp án ---------- */
+  function tagCard(ex) {
+    var used = ex.tags.filter(function (t) { return t.name && t.qs.length; }).length, h = '<div class="card"><div class="row" style="justify-content:space-between"><div><b>Thẻ năng lực (tùy chọn)</b><div class="small muted">' + (used ? used + ' thẻ đang dùng, có thống kê ở tab Kết quả' : 'Chưa dùng. Bỏ qua nếu bạn không cần thống kê theo chuẩn đầu ra.') + '</div></div><button class="btn sm" data-act="tagtoggle">' + (ui.tagOpen ? 'Thu gọn' : (used ? 'Sửa' : 'Thiết lập')) + '</button></div>';
+    if (ui.tagOpen) {
+      h += '<div class="small muted" style="margin:10px 0">Mỗi thẻ là một chuẩn đầu ra hay năng lực (ví dụ CLO1, PLO2). Nhập các câu thuộc thẻ, ví dụ 1-10, 15, 20-25. Một câu có thể thuộc nhiều thẻ.</div>';
+      ex.tags.forEach(function (t, i) {
+        h += '<div class="tagrow"><label class="f">Tên thẻ<input type="text" data-tgname="' + i + '" value="' + esc(t.name) + '" placeholder="Ví dụ CLO1" autocapitalize="characters"></label>' +
+          '<label class="f">Các câu thuộc thẻ<input type="text" data-tgqs="' + i + '" value="' + esc(rangesText(t.qs)) + '" placeholder="1-10, 15" inputmode="text"></label>' +
+          '<button class="btn sm danger" data-act="tagdel" data-i="' + i + '">Xóa thẻ</button></div>';
+      });
+      h += '<div class="row" style="margin-top:10px"><button class="btn" data-act="tagadd">+ Thêm thẻ</button></div>' +
+        '<label class="f" style="margin-top:12px">Ngưỡng đạt của thẻ (% điểm tối đa của thẻ)<input type="number" id="exTagPct" min="0" max="100" step="any" inputmode="decimal" value="' + tagPct(ex) + '"></label>' +
+        '<div class="small muted" style="margin-top:6px">Một sinh viên được tính là đạt thẻ khi điểm của các câu trong thẻ đạt từ ngưỡng này trở lên.</div>';
+    }
+    return h + '</div>';
+  }
   function viewKey() {
     var ex = cur(), v = ui.kver, key = ex.keys[v] || [], h = '';
     h += '<div class="card"><div class="grid2">' +
@@ -936,6 +986,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       [['none', 'Không (phải tô đúng hết mới có điểm)'], ['standard', 'Tiêu chuẩn của ZipGrade (đúng + bỏ đúng) / 5'], ['proportional', 'Tỷ lệ của ZipGrade (phạt tô thừa, bỏ trống 0 điểm)']].map(function (o) { return '<option value="' + o[0] + '"' + (ex.partial === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' +
       '<div class="f" style="margin-top:12px"><span>Điểm mỗi câu (áp dụng cho cả ' + ex.n + ' câu)</span><div class="row" style="margin-top:6px"><input type="number" id="ptsAll" min="0" step="any" inputmode="decimal" value="' + (Math.round(ex.scale / ex.n * 10000) / 10000) + '" style="width:100px"><button class="btn sm primary" data-act="ptsall">Áp dụng</button></div>' +
       '<span class="small muted" style="margin-top:4px">Mặc định là thang điểm chia đều cho số câu (' + ex.n + ' câu, thang ' + fmt(ex.scale) + ': mỗi câu ' + fmt(ex.scale / ex.n, 4) + ' điểm). Muốn câu nào điểm khác thì bấm "Điểm từng câu và đáp án phụ" ở dưới. Tổng điểm hiện tại: ' + fmt(totalPts(ex)) + '.</span></div>' + '</div>';
+    h += tagCard(ex);
     h += '<h2>Mã đề</h2><div class="seg">' + LET.map(function (L) { var c = keyReady(ex, L); return '<button data-kver="' + L + '" class="' + (v === L ? 'on' : '') + '">' + L + '<span class="d">' + (c ? c + '/' + ex.n : 'trống') + '</span></button>'; }).join('') + '</div>';
     var miss = [], rawSum = 0, kq;
     for (kq = 0; kq < ex.n; kq++) { if (!key[kq]) miss.push(kq + 1); else rawSum += ex.pts[kq] != null && ex.pts[kq] !== '' ? +ex.pts[kq] : 1; }
@@ -1036,6 +1087,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       '<div class="stat"><b>' + dash(st && fmt(st.max)) + '</b><span>Cao nhất (Max)</span></div>' +
       '<div class="stat wide"><b>' + dash(st && (fmt(Math.round(st.rate * 1000) / 10) + '%')) + '</b><span>Tỷ lệ đạt (Pass rate)' + (st ? ': ' + st.pass + ' / ' + st.n + ' bài từ ' + fmt(st.ps) + ' điểm trở lên' : '') + '</span></div></div>' +
       (rows.length > scored.length ? '<div class="small muted" style="margin-top:8px">' + (rows.length - scored.length) + ' bài chưa có điểm vì thiếu mã đề hoặc đáp án.</div>' : '') + '</div>';
+    var ts = tagStats(ex);
+    if (ts) {
+      h += '<div class="card"><b>Thống kê theo thẻ năng lực</b><div class="small muted" style="margin:4px 0 10px">Đạt thẻ khi điểm các câu trong thẻ từ ' + fmt(Math.round(ts.thr * 1000) / 10) + '% trở lên.</div><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Thẻ</th><th class="num">Số câu</th><th class="num">TB (%)</th><th class="num">Đạt</th><th class="num">Tỷ lệ</th></tr></thead><tbody>' +
+        ts.rows.map(function (r) { return '<tr><td><b>' + esc(r.name) + '</b></td><td class="num">' + r.nq + '</td><td class="num">' + (r.mean == null ? '-' : fmt(Math.round(r.mean * 1000) / 10)) + '</td><td class="num">' + (r.n ? r.ach + ' / ' + r.n : '-') + '</td><td class="num">' + (r.n ? fmt(Math.round(r.ach / r.n * 1000) / 10) + '%' : '-') + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+    }
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Phân bố điểm</b><span class="small muted">Số bài theo khoảng điểm</span></div><svg id="chHist" class="chart" viewBox="0 0 600 170"></svg></div>';
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Tỷ lệ làm đúng từng câu</b><span class="small muted" id="hard"></span></div><svg id="chQ" class="chart" viewBox="0 0 600 190"></svg></div>';
     h += '<div class="row"><button class="btn primary" data-act="xlsx">Xuất Excel</button><button class="btn" data-act="csv">Xuất CSV</button><button class="btn" data-act="roster">Danh sách lớp</button></div>';
@@ -1171,6 +1227,15 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var sm = [['Chỉ số', 'Giá trị'], ['Số bài đã chấm', ex.results.length], ['Số bài có điểm', scs.length]];
     if (cs) sm.push(['Trung bình (Mean)', Math.round(cs.mean * 100) / 100], ['Trung vị (Median)', Math.round(cs.median * 100) / 100], ['Độ lệch chuẩn (SD, mẫu n-1)', Math.round(cs.sd * 100) / 100], ['Thấp nhất (Min)', cs.min], ['Cao nhất (Max)', cs.max], ['Điểm đạt', Math.round(cs.ps * 100) / 100], ['Số bài đạt', cs.pass], ['Tỷ lệ đạt (Pass rate)', Math.round(cs.rate * 1000) / 1000]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sm), 'Tổng quan');
+    var tsx = tagStats(ex);
+    if (tsx) {
+      var tr = [['Thẻ', 'Số câu', 'Các câu', 'Số bài có điểm', 'Điểm trung bình (%)', 'Số bài đạt thẻ', 'Tỷ lệ đạt thẻ', 'Ngưỡng đạt (%)']];
+      var tgs = ex.tags.filter(function (t) { return t.name && t.qs.length; });
+      tsx.rows.forEach(function (r, ri) { tr.push([r.name, r.nq, rangesText(tgs[ri].qs), r.n, r.mean == null ? '' : Math.round(r.mean * 1000) / 10, r.ach, r.n ? Math.round(r.ach / r.n * 1000) / 1000 : '', Math.round(tsx.thr * 1000) / 10]); });
+      tr.push([]); var th = ['STT', 'ID', 'Họ tên']; tsx.rows.forEach(function (r) { th.push(r.name + ' (%)'); }); tr.push(th);
+      tsx.results.forEach(function (r, ri) { var row = [ri + 1, r.sid, ex.roster[r.sid] || '']; tsx.rows.forEach(function (c) { var v = c.per[ri]; row.push(v == null ? '' : Math.round(v * 1000) / 10); }); tr.push(row); });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tr), 'Thẻ năng lực');
+    }
     var st = [['Câu', 'Số bài có đáp án', 'Số bài đúng', 'Tỷ lệ đúng']];
     for (i = 0; i < ex.n; i++) {
       var tot = 0, ok = 0;
@@ -1425,6 +1490,9 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         save(); render(); toast('Mỗi câu ' + fmt(pv2, 4) + ' điểm, tổng ' + fmt(pv2 * ex.n, 2)); break;
       case 'endsess': ui.sess = 0; render(); break;
       case 'keyclear': delete ex.keys[ui.kver]; save(); render(); break;
+      case 'tagtoggle': ui.tagOpen = !ui.tagOpen; render(); break;
+      case 'tagadd': ex.tags.push({ name: '', qs: [] }); ui.tagOpen = true; save(); render(); break;
+      case 'tagdel': ex.tags.splice(+d.i, 1); save(); render(); break;
       case 'newexam':
         var ne = newExam('Bài kiểm tra ' + (S.exams.length + 1)); S.exams.push(ne); S.cur = ne.id; ui.kver = 'A'; save(); render(); break;
       case 'delexam': ui.confirmDel = ex.id; render(); break;
@@ -1452,6 +1520,9 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (t.id === 'thr') { S.thr = +t.value; save(); var lb = t.closest('label'); lb.firstChild.nodeValue = 'Độ nhạy khi đọc ô tô: ' + fmt(S.thr, 2); return; }
     if (t.id === 'exName') { ex.name = t.value.trim() || ex.name; save(); renderChrome(); return; }
     if (t.id === 'exN') { var n = Math.max(1, Math.min(50, Math.round(+t.value || 50))); ex.n = n; save(); render(); return; }
+    if (t.dataset && t.dataset.tgname !== undefined) { ex.tags[+t.dataset.tgname].name = t.value.trim(); save(); return; }
+    if (t.dataset && t.dataset.tgqs !== undefined) { var qsn = parseRanges(t.value, ex.n); ex.tags[+t.dataset.tgqs].qs = qsn; t.value = rangesText(qsn); save(); return; }
+    if (t.id === 'exTagPct') { var tp = +t.value; if (t.value !== '' && tp >= 0 && tp <= 100) { ex.tagPct = tp; save(); render(); } return; }
     if (t.id === 'exPass') { var pv = +t.value; if (t.value !== '' && pv >= 0 && ex.scale > 0) { ex.passPct = Math.min(100, pv / ex.scale * 100); save(); } return; }
     if (t.id === 'exScale') { var sv = +t.value; if (sv > 0) { ex.scale = sv; save(); render(); } return; }
     if (t.id === 'bkScope') { ui.bkScope = t.value; return; }
