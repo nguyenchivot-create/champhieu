@@ -697,7 +697,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       var cnt = r.ans.slice(0, ex.n).filter(function (a) { return a.length === 1; }).length;
       sc.innerHTML = '<div class="small muted">Đã đọc ' + cnt + ' / ' + ex.n + ' câu có đúng một đáp án. Sửa các ô còn thiếu rồi bấm "Dùng làm đáp án".</div>';
     } else if (g) {
-      sc.innerHTML = '<div class="scorebox"><div class="score">' + fmt(g.score) + '<small> / ' + fmt(ex.scale) + '</small></div><div class="muted">Đúng ' + g.ok + ' · Sai ' + g.wrong + ' · Trống ' + g.blank + (g.part ? ' · Một phần ' + g.part : '') + ' (trên ' + g.tot + ' câu có đáp án) · ' + fmt(g.earn) + ' / ' + fmt(g.max) + ' điểm thô</div></div>' +
+      sc.innerHTML = '<div class="scorebox"><div class="score">' + fmt(g.score) + '<small> / ' + fmt(ex.scale) + ' = ' + (ex.scale ? fmt(Math.round(g.score / ex.scale * 1000) / 10) : '0') + '%</small></div><div class="muted">Đúng ' + g.ok + ' · Sai ' + g.wrong + ' · Trống ' + g.blank + (g.part ? ' · Một phần ' + g.part : '') + ' (trên ' + g.tot + ' câu có đáp án) · ' + fmt(g.earn) + ' / ' + fmt(g.max) + ' điểm thô</div></div>' +
         (g.assumed ? '<div class="banner ' + (keyedCount(ex) > 1 ? 'warn' : 'info') + '" style="margin-top:10px">Phiếu không tô mã đề, đang chấm theo mã ' + g.usedVer + '.' + (keyedCount(ex) > 1 ? ' Có nhiều mã đề có đáp án, hãy chọn đúng mã bên dưới nếu cần.' : '') + '</div>' : '');
     } else {
       sc.innerHTML = '<div class="banner warn">' + (r.ver ? 'Chưa có đáp án cho mã ' + r.ver + '. Vào tab Đáp án để nhập.' : 'Chưa có đáp án nào để chấm. Vào tab Đáp án để nhập.') + '</div>';
@@ -752,8 +752,16 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         var qs2 = key && key[i] ? qScore(ex, key[i], a, i) : null;
         if (qs2) col = qs2.kind === 'full' ? cOk : qs2.kind === 'part' ? cWarn : cBad; else if (a.length > 1) col = cWarn;
         ring(LAYOUT.ans[i][li], col, 1.15, false);
+        if (qs2 && qs2.kind === 'wrong') { var xp = P(LAYOUT.ans[i][li]), xr = rad * 1.5; ctx.beginPath(); ctx.moveTo(xp[0] - xr, xp[1] - xr); ctx.lineTo(xp[0] + xr, xp[1] + xr); ctx.moveTo(xp[0] + xr, xp[1] - xr); ctx.lineTo(xp[0] - xr, xp[1] + xr); ctx.lineWidth = Math.max(2, rad * 0.22); ctx.strokeStyle = cBad; ctx.stroke(); }
       }
       var qs3 = key && key[i] ? qScore(ex, key[i], a, i) : null;
+      if (qs3) {
+        var a0 = P(LAYOUT.ans[i][0]), a1 = P(LAYOUT.ans[i][1]), pitch = Math.abs(a1[0] - a0[0]), mx = a0[0] - pitch * 1.95, fs = Math.max(12, rad * 1.7);
+        var mk = qs3.kind === 'full' ? '\u2713' : qs3.kind === 'part' ? '\u00bd' : '\u2717', mc = qs3.kind === 'full' ? cOk : qs3.kind === 'part' ? cWarn : cBad;
+        ctx.font = '800 ' + fs + 'px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255,255,255,0.88)'; ctx.beginPath(); ctx.arc(mx, a0[1], fs * 0.62, 0, 6.2832); ctx.fill();
+        ctx.fillStyle = mc; ctx.fillText(mk, mx, a0[1] + 1);
+      }
       if (qs3 && qs3.kind !== 'full') parseKey(key[i]).prim.split('').forEach(function (c) { ring(LAYOUT.ans[i][LET.indexOf(c)], cOk, 0.8, true); });
     }
     var ids = r.sid || '';
