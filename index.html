@@ -120,11 +120,11 @@ body.inrev .tabs, body.inrev .top { display: none; }
 .rvmeta .rvf .f { flex: 1; min-width: 0; }
 .rvmeta .nmimg { flex: 1 1 100%; width: auto; min-width: 0; height: auto; max-height: 96px; margin: 0; object-fit: contain; object-position: left center; }
 .rvmeta .nmimg[hidden] { display: none; }
-.rvbar { position: sticky; bottom: 0; z-index: 25; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); margin: 4px 0 0; border-radius: 0 0 12px 12px; }
-.rvseg { display: flex; flex: 1; max-width: 360px; background: var(--bg); border: 1px solid var(--edge); border-radius: 12px; padding: 3px; gap: 3px; }
-.rvseg button { flex: 1; white-space: nowrap; padding: 0 4px; min-width: 0; border: 0; background: transparent; min-height: 48px; border-radius: 9px; font-weight: 700; font-size: 16px; color: var(--muted); }
+.rvbar { position: sticky; bottom: 0; z-index: 25; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); margin: 4px 0 0; border-radius: 0 0 12px 12px; }
+.rvseg { display: flex; flex: 1; max-width: 340px; background: var(--bg); border: 1px solid var(--edge); border-radius: 12px; padding: 3px; gap: 4px; }
+.rvseg button { flex: 1; white-space: nowrap; padding: 0 6px; min-width: 0; border: 0; background: transparent; min-height: 40px; border-radius: 9px; font-weight: 600; font-size: 14.5px; letter-spacing: 0.2px; color: var(--muted); }
 .rvseg button.on { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-.rvarrow { flex: 0 0 54px; min-height: 54px; border: 0; background: transparent; color: var(--accent); font-size: 38px; font-weight: 800; line-height: 1; }
+.rvarrow { flex: 0 0 44px; min-height: 44px; border: 0; background: transparent; color: var(--accent); font-size: 30px; font-weight: 700; line-height: 1; }
 .rvarrow[disabled] { opacity: 0.25; }
 .rvpane[hidden] { display: none; }
 .review .shot { touch-action: pan-y; max-width: 100%; }
@@ -176,7 +176,11 @@ body.inrev .tabs, body.inrev .top { display: none; }
 .tbl td, .tbl th { padding-left: 6px; padding-right: 6px; }
 .tbl td:first-child { width: 1%; }
 .tbl td .btn.sm { padding: 0 10px; min-width: 48px; }
-.tbl .nmimg { max-width: 100%; }
+.tbl .nmimg { max-width: 100%; width: 120px; height: 28px; }
+.tbl .fl { font-size: 13px; font-weight: 600; color: var(--warn); margin-top: 2px; line-height: 1.35; }
+button.chip.tg { min-height: 36px; padding: 4px 14px; font-size: 14px; }
+button.chip.tg[aria-pressed="true"] { background: var(--accent-soft, var(--bg)); border-color: var(--accent); color: var(--accent); }
+button.chip.tg[aria-pressed="true"]::before { content: "\2713\00a0"; }
 .card.scroll { padding: 8px; }
 .tbl th.num { font-family: inherit; }
 .scroll { overflow-x: auto; }
@@ -1188,10 +1192,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     h += '<div class="card"><div class="grid2"><label class="f">Tìm theo ID hoặc tên<input type="search" id="rsQ" value="' + esc(ui.q) + '" placeholder="Gõ rồi bấm Enter"></label>' +
       '<label class="f">Sắp xếp<select id="rsSort">' + [['scan', 'Theo thứ tự quét'], ['id', 'Theo ID'], ['name', 'Theo họ tên'], ['hi', 'Điểm cao đến thấp'], ['lo', 'Điểm thấp đến cao']].map(function (o) { return '<option value="' + o[0] + '"' + (ui.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>' +
       '<label class="f" style="margin-top:10px">Hiển thị<select id="rsFilt">' + [['all', 'Tất cả ' + rows.length + ' bài'], ['flag', 'Bài cần kiểm tra (' + nflag + ')'], ['checked', 'Bài đã duyệt']].map(function (o) { return '<option value="' + o[0] + '"' + (ui.filt === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
+    h += '<div class="row" style="gap:8px;margin:0 0 8px;align-items:center"><span class="small muted">Hiện:</span><button class="chip tg" aria-pressed="' + (S.showNm !== false) + '" data-act="tglnm">Ảnh tên</button><button class="chip tg" aria-pressed="' + (S.showFl !== false) + '" data-act="tglfl">Cảnh báo</button></div>';
     h += '<div class="card scroll"><table class="tbl"><thead><tr><th>#</th><th>ID / Họ tên / Mã đề</th><th class="num">Điểm</th><th></th></tr></thead><tbody>';
     list.forEach(function (x) {
       var r = x.r, i = x.i, nm = x.name;
-      h += '<tr class="rw" data-open="' + r.id + '"><td class="muted">' + (i + 1) + '</td><td>' + (r.sid ? '<span class="mono">' + esc(r.sid) + '</span>' : '<span class="muted">Không có ID</span>') + (r.st === 'checked' ? ' <span class="chip on">đã duyệt</span>' : '') + (nm ? '<div class="small muted">' + esc(nm) + '</div>' : (r.nm ? '<img class="nmimg" data-nm="' + r.id + '" alt="Tên viết tay">' : '')) + (x.flags.length ? '<div style="margin-top:3px">' + x.flags.map(function (f) { return '<span class="chip warn">' + esc(f) + '</span>'; }).join(' ') + '</div>' : '') + '<div class="small muted" style="margin-top:3px">Mã đề ' + (r.ver ? esc(r.ver) : (x.g ? '(' + esc(x.g.usedVer) + ', chưa tô)' : '-')) + '</div></td>' +
+      h += '<tr class="rw" data-open="' + r.id + '"><td class="muted">' + (i + 1) + '</td><td>' + (r.sid ? '<span class="mono">' + esc(r.sid) + '</span>' : '<span class="muted">Không có ID</span>') + (r.st === 'checked' ? ' <span class="chip on">đã duyệt</span>' : '') + (nm ? '<div class="small muted">' + esc(nm) + '</div>' : (r.nm && S.showNm !== false ? '<img class="nmimg" data-nm="' + r.id + '" alt="Tên viết tay">' : '')) + (function (fl) { return fl.length && S.showFl !== false ? '<div class="fl">\u26A0 ' + fl.map(esc).join(' \u00b7 ') + '</div>' : ''; })(x.flags.filter(function (f) { return f !== 'Không có ID'; })) + '<div class="small muted" style="margin-top:2px">Mã ' + (r.ver ? esc(r.ver) : (x.g ? esc(x.g.usedVer) + ' (chưa tô)' : '-')) + '</div></td>' +
         '<td class="num"><b style="font-size:20px">' + (x.g ? fmt(x.g.score) : '-') + '</b><div class="small muted">' + (x.g ? x.g.ok + '/' + x.g.tot : '') + '</div></td>' +
         '<td>' + (ui.confirmDel === r.id ? '<button class="btn sm danger" data-del2="' + r.id + '">Xóa</button> <button class="btn sm" data-delno="1">Giữ</button>' : '<button class="btn sm" data-del="' + r.id + '" aria-label="Xóa bài">Xóa</button>') + '</td></tr>';
     });
@@ -1514,6 +1519,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       case 'keyscan': $('#inKey').click(); break;
       case 'clearerr': ui.errs = []; render(); break;
       case 'skip': var wasEdit = r && r.editId; ui.review = null; ui.busy = false; if (wasEdit) ui.tab = 'res'; render(); if (!wasEdit) processNext(); break;
+      case 'tglnm': S.showNm = S.showNm === false; save(); render(); break;
+      case 'tglfl': S.showFl = S.showFl === false; save(); render(); break;
       case 'rvback':
         if (r && r.editId && reviewDirty()) { var sb2 = document.querySelector('[data-act=saveres]'); if (sb2) sb2.click(); }
         else { ui.review = null; ui.tab = 'res'; render(); window.scrollTo(0, 0); }
