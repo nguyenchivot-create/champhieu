@@ -580,7 +580,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   }
   function tagPct(ex) { return ex.tagPct == null ? (ex.passPct == null ? 50 : ex.passPct) : ex.tagPct; }
   function tagStats(ex) {
-    var tags = (ex.tags || []).filter(function (t) { return t.name && t.qs && t.qs.length; });
+    var tags = (ex.tags || []).map(function (t) { return { name: t.name, qs: (t.qs || []).filter(function (q) { return q < ex.n; }) }; }).filter(function (t) { return t.name && t.qs.length; });
     if (!tags.length) return null;
     var thr = tagPct(ex) / 100, graded = ex.results.map(function (r) { return { r: r, k: keyFor(ex, r) }; }).filter(function (x) { return x.k; });
     var rows = tags.map(function (t) {
@@ -1230,7 +1230,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var tsx = tagStats(ex);
     if (tsx) {
       var tr = [['Thẻ', 'Số câu', 'Các câu', 'Số bài có điểm', 'Điểm trung bình (%)', 'Số bài đạt thẻ', 'Tỷ lệ đạt thẻ', 'Ngưỡng đạt (%)']];
-      var tgs = ex.tags.filter(function (t) { return t.name && t.qs.length; });
+      var tgs = ex.tags.map(function (t) { return { name: t.name, qs: t.qs.filter(function (q) { return q < ex.n; }) }; }).filter(function (t) { return t.name && t.qs.length; });
       tsx.rows.forEach(function (r, ri) { tr.push([r.name, r.nq, rangesText(tgs[ri].qs), r.n, r.mean == null ? '' : Math.round(r.mean * 1000) / 10, r.ach, r.n ? Math.round(r.ach / r.n * 1000) / 1000 : '', Math.round(tsx.thr * 1000) / 10]); });
       tr.push([]); var th = ['STT', 'ID', 'Họ tên']; tsx.rows.forEach(function (r) { th.push(r.name + ' (%)'); }); tr.push(th);
       tsx.results.forEach(function (r, ri) { var row = [ri + 1, r.sid, ex.roster[r.sid] || '']; tsx.rows.forEach(function (c) { var v = c.per[ri]; row.push(v == null ? '' : Math.round(v * 1000) / 10); }); tr.push(row); });
