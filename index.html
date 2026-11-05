@@ -867,16 +867,17 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     h += '<div class="card"><div class="grid2">' +
       '<label class="f">Tên bài kiểm tra<input type="text" id="exName" value="' + esc(ex.name) + '"></label>' +
       '<label class="f">Số câu (1 đến 50)<input type="number" id="exN" min="1" max="50" value="' + ex.n + '" inputmode="numeric"></label>' +
-      '</div><div class="f" style="margin-top:12px"><span>Thang điểm</span><div class="chips" style="margin-top:6px">' +
+      '</div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn sm" data-act="newexam">+ Bài kiểm tra mới</button>' +
+      (S.exams.length > 1 ? (ui.confirmDel === ex.id ? '<button class="btn sm danger" data-act="delexam2">Xóa hẳn bài này và ' + ex.results.length + ' kết quả</button><button class="btn sm" data-act="delexamno">Giữ lại</button>' : '<button class="btn sm danger" data-act="delexam">Xóa bài này</button>') : '') + '</div>' +
+      '<div class="f" style="margin-top:12px"><span>Thang điểm</span><div class="chips" style="margin-top:6px">' +
       [10, 100].map(function (s) { return '<button class="chip' + (ex.scale === s ? ' on' : '') + '" data-scale="' + s + '">' + s + '</button>'; }).join('') +
       '<input type="number" id="exScale" min="1" max="1000" step="any" value="' + ex.scale + '" inputmode="decimal" style="width:90px;min-height:0;padding:3px 8px" aria-label="Thang điểm khác"></div>' +
       '<span class="small muted" style="margin-top:4px">Điểm = tổng điểm đạt / tổng điểm tối đa x thang điểm. Câu bỏ trống trong đáp án không tính.</span></div>' +
       '<label class="f" style="margin-top:12px">Điểm từng phần (cho câu có đáp án từ 2 chữ cái trở lên)<select id="exPartial">' +
       [['none', 'Không (phải tô đúng hết mới có điểm)'], ['standard', 'Tiêu chuẩn của ZipGrade (đúng + bỏ đúng) / 5'], ['proportional', 'Tỷ lệ của ZipGrade (phạt tô thừa, bỏ trống 0 điểm)']].map(function (o) { return '<option value="' + o[0] + '"' + (ex.partial === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' +
       '<div class="f" style="margin-top:12px"><span>Điểm mỗi câu (áp dụng cho cả ' + ex.n + ' câu)</span><div class="row" style="margin-top:6px"><input type="number" id="ptsAll" min="0" step="any" inputmode="decimal" value="' + (Math.round(ex.scale / ex.n * 10000) / 10000) + '" style="width:100px"><button class="btn sm primary" data-act="ptsall">Áp dụng</button></div>' +
-      '<span class="small muted" style="margin-top:4px">Mặc định là thang điểm chia đều cho số câu (' + ex.n + ' câu, thang ' + fmt(ex.scale) + ': mỗi câu ' + fmt(ex.scale / ex.n, 4) + ' điểm). Muốn câu nào điểm khác thì bấm "Điểm từng câu và đáp án phụ" ở dưới. Tổng điểm hiện tại: ' + fmt(totalPts(ex)) + '.</span></div>' +
-      '<div class="row" style="margin-top:12px"><button class="btn sm" data-act="newexam">+ Bài kiểm tra mới</button>' +
-      (S.exams.length > 1 ? (ui.confirmDel === ex.id ? '<button class="btn sm danger" data-act="delexam2">Xóa hẳn bài này và ' + ex.results.length + ' kết quả</button><button class="btn sm" data-act="delexamno">Giữ lại</button>' : '<button class="btn sm danger" data-act="delexam">Xóa bài này</button>') : '') + '</div></div>';
+      '<span class="small muted" style="margin-top:4px">Mặc định là thang điểm chia đều cho số câu (' + ex.n + ' câu, thang ' + fmt(ex.scale) + ': mỗi câu ' + fmt(ex.scale / ex.n, 4) + ' điểm). Muốn câu nào điểm khác thì bấm "Điểm từng câu và đáp án phụ" ở dưới. Tổng điểm hiện tại: ' + fmt(totalPts(ex)) + '.</span></div>' + '</div>';
     h += '<h2>Mã đề</h2><div class="seg">' + LET.map(function (L) { var c = keyReady(ex, L); return '<button data-kver="' + L + '" class="' + (v === L ? 'on' : '') + '">' + L + '<span class="d">' + (c ? c + '/' + ex.n : 'trống') + '</span></button>'; }).join('') + '</div>';
     var miss = [], rawSum = 0, kq;
     for (kq = 0; kq < ex.n; kq++) { if (!key[kq]) miss.push(kq + 1); else rawSum += ex.pts[kq] != null && ex.pts[kq] !== '' ? +ex.pts[kq] : 1; }
