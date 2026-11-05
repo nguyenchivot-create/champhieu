@@ -574,7 +574,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function save() { clearTimeout(saveT); saveT = setTimeout(function () { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }, 150); }
   function cur() { return S.exams.filter(function (e) { return e.id === S.cur; })[0] || S.exams[0]; }
 
-  var ui = { sess: 0, q: '', sort: 'scan', filt: 'all', tab: 'scan', kver: 'A', review: null, queue: [], busy: false, errs: [], confirmDel: null, rosterOpen: false, dl: undefined };
+  var ui = { sess: 0, q: '', sort: 'scan', filt: 'all', tab: 'key', kver: 'A', review: null, queue: [], busy: false, errs: [], confirmDel: null, rosterOpen: false, dl: undefined };
 
   /* ---------- Chấm điểm ---------- */
   function defaultVer(ex) { for (var i = 0; i < LET.length; i++) if (keyReady(ex, LET[i])) return LET[i]; return ''; }
