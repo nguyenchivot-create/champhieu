@@ -108,6 +108,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .rvnav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .rvnav .btn { flex: 0 0 auto; min-width: 104px; font-size: 17px; }
 .rvnav .rvpos { font-weight: 700; font-variant-numeric: tabular-nums; }
+html, body { overflow-x: hidden; max-width: 100%; }
 body.inrev .tabs, body.inrev .top { display: none; }
 .review { gap: 12px; }
 .review #rvScore { text-align: center; }
@@ -119,14 +120,16 @@ body.inrev .tabs, body.inrev .top { display: none; }
 .rvmeta .rvf .f { flex: 1; min-width: 0; }
 .rvmeta .nmimg { flex: 1 1 100%; width: auto; min-width: 0; height: auto; max-height: 96px; margin: 0; object-fit: contain; object-position: left center; }
 .rvmeta .nmimg[hidden] { display: none; }
-.rvbar { position: sticky; bottom: 0; z-index: 25; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); margin: 4px -16px -16px; border-radius: 0 0 12px 12px; }
+.rvbar { position: sticky; bottom: 0; z-index: 25; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); margin: 4px 0 0; border-radius: 0 0 12px 12px; }
 .rvseg { display: flex; flex: 1; max-width: 360px; background: var(--bg); border: 1px solid var(--edge); border-radius: 12px; padding: 3px; gap: 3px; }
-.rvseg button { flex: 1; border: 0; background: transparent; min-height: 48px; border-radius: 9px; font-weight: 700; font-size: 16px; color: var(--muted); }
+.rvseg button { flex: 1; white-space: nowrap; padding: 0 4px; min-width: 0; border: 0; background: transparent; min-height: 48px; border-radius: 9px; font-weight: 700; font-size: 16px; color: var(--muted); }
 .rvseg button.on { background: var(--surface); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 .rvarrow { flex: 0 0 54px; min-height: 54px; border: 0; background: transparent; color: var(--accent); font-size: 38px; font-weight: 800; line-height: 1; }
 .rvarrow[disabled] { opacity: 0.25; }
 .rvpane[hidden] { display: none; }
-.review .shot { touch-action: pan-y; }
+.review .shot { touch-action: pan-y; max-width: 100%; }
+.review, .review * { min-width: 0; }
+.review select, .review input { max-width: 100%; }
 .qgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 @media (min-width: 560px) { .qgrid { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
 .q { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 4px 2px; min-height: 48px; text-align: center; display: flex; flex-direction: column; justify-content: center; gap: 0; line-height: 1.15; }
@@ -1398,7 +1401,13 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var full6 = det.ok && det.markersFound >= 6;
     if (LV.state === 'clear') {
       if (!det.ok) { LV.lost++; if (LV.lost >= 3) { LV.state = 'search'; LV.stable = 0; LV.lastShape = null; lvMsg('Sẵn sàng. Đưa phiếu tiếp theo vào khung'); } }
-      else { LV.lost = 0; if (lvMoved(LV.savedShape, lvShape(det.markers, sm.w, sm.h))) { LV.state = 'search'; LV.stable = 0; LV.lastShape = null; } else lvMsg('Bỏ phiếu cũ ra và đưa phiếu mới vào khung'); }
+      else {
+        LV.lost = 0; var shc = lvShape(det.markers, sm.w, sm.h);
+        if (lvMoved(LV.savedShape, shc)) { LV.state = 'search'; LV.stable = 0; LV.lastShape = null; return; }
+        lvMsg('Bỏ phiếu cũ ra và đưa phiếu mới vào khung');
+        /* thay phiếu đúng chỗ cũ (không di chuyển): đọc lại định kỳ, trùng bài vừa quét thì bỏ qua */
+        if (full6 && Date.now() - (LV.recheckAt || 0) > 1500) { LV.recheckAt = Date.now(); await liveCapture(false, true); }
+      }
       return;
     }
     if (!full6) { LV.stable = 0; LV.lastShape = null; lvMsg(det.ok ? 'Chưa thấy đủ 6 ô vuông đen, hãy lùi ra hoặc chỉnh góc' : 'Đưa cả tờ phiếu vào khung, giữ cố định'); return; }
@@ -1407,20 +1416,23 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     LV.lastShape = sh; lvMsg('Giữ yên…');
     if (LV.stable >= 2) await liveCapture(false);
   }
-  async function liveCapture(manual) {
-    if (!LV || LV.busy) return; LV.busy = true; LV.state = 'busy'; lvMsg('Đang chấm…');
+  async function liveCapture(manual, recheck) {
+    if (!LV || LV.busy) return; LV.busy = true; LV.state = 'busy'; if (!recheck) lvMsg('Đang chấm…');
     await tick();
     var ex = cur(), full = frameGray(LV.vid, 2400), res = OMR.scan(full.gray, full.w, full.h, { threshold: S.thr });
     LV.busy = false;
+    if (recheck && (!res.ok || res.midMatched < 2 || res.tooSmall)) { LV.state = 'clear'; return; }
     if (!res.ok || res.midMatched < 2 || res.tooSmall) { LV.state = 'search'; LV.stable = 0; lvMsg(res.ok && res.tooSmall ? 'Phiếu hơi nhỏ trong khung, đưa camera lại gần hơn' : 'Chưa đọc được phiếu, giữ yên và thử lại'); return; }
     var sid = (res.id || '').trim(), ans = res.answers.slice(0, 50), sig = sid + '|' + ans.join(',');
     var shape = lvShape(res.markers, full.w, full.h);
-    if (LV.last && LV.last.sig === sig) { LV.state = 'clear'; LV.lost = 0; LV.savedShape = shape; lvMsg('Bài này vừa quét rồi. Bỏ phiếu ra và đưa phiếu mới vào'); return; }
+    var sameAs = false;
+    if (LV.last) { var df = 0; for (var qq = 0; qq < 50; qq++) if ((LV.last.ans[qq] || '') !== (ans[qq] || '')) df++; sameAs = LV.last.sig === sig || (sid === LV.last.sid && df <= 2); }
+    if (sameAs) { LV.state = 'clear'; LV.lost = 0; LV.savedShape = shape; lvMsg('Bài này vừa quét rồi. Bỏ phiếu ra và đưa phiếu mới vào'); return; }
     var uns = res.unsure.filter(function (u, q2) { return u && ans[q2] === res.answers[q2]; }).length;
     var rec = { id: 'r' + Date.now().toString(36) + Math.floor(Math.random() * 999), ts: Date.now(), sid: sid, ver: res.version, ans: ans, st: '', hist: [], uns: uns };
     var dup = sid && ex.results.filter(function (x) { return x.sid === sid; })[0];
     var nmo = await cropName(full.canvas, res.H); rec.nm = nmo.ink ? 1 : 0;
-    LV.last = { sig: sig }; LV.pending = { rec: rec, canvas: full.canvas, H: res.H, dupId: dup ? dup.id : null, nm: nmo };
+    LV.last = { sig: sig, sid: sid, ans: ans }; LV.pending = { rec: rec, canvas: full.canvas, H: res.H, dupId: dup ? dup.id : null, nm: nmo };
     if (!dup) liveCommit(false);
     LV.savedShape = shape; liveShow(rec, !!dup, res);
   }
