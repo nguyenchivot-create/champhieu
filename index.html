@@ -871,10 +871,13 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function drawOverlay() {
     var r = ui.review, cv = $('#ov');
     if (!r || !r.rectSrc || !cv) return;
-    var ctx = cv.getContext('2d'), k = cv.width / (RG.x1 - RG.x0), ex = cur();
+    drawOverlayOn(cv, r, cur(), null);
+  }
+  function drawOverlayOn(cv, r, ex, pal) {
+    var ctx = cv.getContext('2d'), k = cv.width / (RG.x1 - RG.x0);
     ctx.drawImage(r.rectSrc, 0, 0, cv.width, cv.height);
     var rad = LAYOUT.bubbleR * k;
-    var cOk = cssVar('--ok'), cBad = cssVar('--bad'), cWarn = cssVar('--warn'), cAcc = '#4da3ff';
+    var cOk = pal ? pal.ok : cssVar('--ok'), cBad = pal ? pal.bad : cssVar('--bad'), cWarn = pal ? pal.warn : cssVar('--warn'), cAcc = pal ? pal.acc : '#4da3ff';
     var key = r.mode === 'key' ? null : ex.keys[r.ver || defaultVer(ex)];
     function P(pt) { return [(pt[0] - RG.x0) * k, (pt[1] - RG.y0) * k]; }
     function ring(pt, color, scale, dash) {
@@ -1181,7 +1184,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Phân bố điểm</b><span class="small muted">Số bài theo khoảng điểm</span></div><svg id="chHist" class="chart" viewBox="0 0 600 170"></svg></div>';
     h += '<div class="card"><div class="row" style="justify-content:space-between"><b>Tỷ lệ làm đúng từng câu</b><span class="small muted" id="hard"></span></div><svg id="chQ" class="chart" viewBox="0 0 600 190"></svg></div>';
     var m1 = h.length;
-    h += '<div class="row"><button class="btn primary" data-act="xlsx">Xuất Excel</button><button class="btn" data-act="csv">Xuất CSV</button><button class="btn" data-act="roster">Danh sách lớp</button></div>';
+    h += '<div class="row"><button class="btn primary" data-act="xlsx">Xuất Excel</button><button class="btn" data-act="csv">Xuất CSV</button><button class="btn" data-act="exppdf">Xuất PDF</button><button class="btn" data-act="roster">Danh sách lớp</button></div><div id="pdfProg" class="small muted" hidden></div>';
     if (ui.dlMsg) h += '<div class="banner info">' + esc(ui.dlMsg) + '</div>';
     var m2 = h.length;
     h += backupCard().replace(/<div class="banner info">[\s\S]*$/, '');
@@ -1338,6 +1341,139 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     await saveFile(safeName(ex.name) + '_' + dateTag() + '.xlsx', new Uint8Array(out));
   }
   async function exportCsv() { var ex = cur(); await saveFile(safeName(ex.name) + '_' + dateTag() + '.csv', csvText(ex)); }
+  /* ---------- Xuất PDF toàn bộ bài chấm ---------- */
+  var PDFW = 1240, PDFH = 1754, PDFF = '"Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif';
+  var PAL = { ok: '#17794d', bad: '#b3322a', warn: '#8a5700', acc: '#2f6fd0', ink: '#1c2024', mut: '#5b646e', line: '#cfd5dc' };
+  function pdfText(c, t, x, y, size, weight, color, align) { c.font = (weight || 400) + ' ' + size + 'px ' + PDFF; c.fillStyle = color || PAL.ink; c.textAlign = align || 'left'; c.textBaseline = 'alphabetic'; c.fillText(String(t), x, y); }
+  function blobImage(b) {
+    return new Promise(function (res) { var u = URL.createObjectURL(b), im = new Image(); im.onload = function () { URL.revokeObjectURL(u); res(im); }; im.onerror = function () { URL.revokeObjectURL(u); res(null); }; im.src = u; });
+  }
+  function pdfNewPage(cv) { cv.width = PDFW; cv.height = PDFH; var c = cv.getContext('2d'); c.fillStyle = '#ffffff'; c.fillRect(0, 0, PDFW, PDFH); return c; }
+  function pdfFooter(c, ex, pg, total) {
+    c.fillStyle = PAL.line; c.fillRect(70, PDFH - 70, PDFW - 140, 2);
+    pdfText(c, ex.name + '  ·  Chấm Phiếu', 70, PDFH - 32, 20, 400, PAL.mut, 'left');
+    pdfText(c, 'Trang ' + pg + ' / ' + total, PDFW - 70, PDFH - 32, 20, 400, PAL.mut, 'right');
+  }
+  async function pdfStudentPage(cv, ex, r, idx, total, pg, pages) {
+    var c = pdfNewPage(cv), M = 70, g = grade(ex, r), nm = ex.roster[r.sid] || '';
+    pdfText(c, ex.name, M, 78, 34, 700); pdfText(c, 'Bài ' + (idx + 1) + ' / ' + total, PDFW - M, 78, 26, 500, PAL.mut, 'right');
+    c.fillStyle = PAL.line; c.fillRect(M, 98, PDFW - 2 * M, 2);
+    pdfText(c, 'ID: ' + (r.sid || 'không có'), M, 150, 30, 600);
+    if (nm) pdfText(c, 'Họ tên: ' + nm, M, 192, 28, 500);
+    pdfText(c, 'Mã đề: ' + (r.ver || (g ? g.usedVer + ' (phiếu không tô, chấm theo mã mặc định)' : 'chưa xác định')), M, nm ? 232 : 192, 24, 400, PAL.mut);
+    var nb = r.nm ? await imgGet('n_' + r.id) : null;
+    if (nb) { var ni = await blobImage(nb); if (ni) { var s0 = Math.min(430 / ni.naturalWidth, 118 / ni.naturalHeight); c.drawImage(ni, PDFW - M - ni.naturalWidth * s0, 118, ni.naturalWidth * s0, ni.naturalHeight * s0); } }
+    var yy = 300;
+    if (g) {
+      pdfText(c, fmt(g.score) + ' / ' + fmt(ex.scale) + ' = ' + fmt(ex.scale ? Math.round(g.score / ex.scale * 1000) / 10 : 0) + '%', M, yy, 58, 700);
+      pdfText(c, 'Đúng ' + g.ok + '  ·  Sai ' + g.wrong + '  ·  Trống ' + g.blank + (g.part ? '  ·  Một phần ' + g.part : '') + '  (trên ' + g.tot + ' câu có đáp án)', M, yy + 40, 24, 400, PAL.mut);
+    } else pdfText(c, 'Chưa có điểm: thiếu mã đề hoặc đáp án', M, yy, 34, 600, PAL.warn);
+    var notes = [];
+    if (r.st === 'review') notes.push('Cần kiểm tra lại'); if (r.st === 'checked') notes.push('Đã duyệt');
+    if (r.uns > 0) notes.push(r.uns + ' ô máy chưa chắc');
+    var key = ex.keys[r.ver || defaultVer(ex)], tp = key ? tagPcts(ex, key, r.ans) : [];
+    if (tp.length) notes.push(tp.map(function (x) { return x.name + ' ' + (x.pct == null ? '-' : fmt(Math.round(x.pct * 1000) / 10) + '%'); }).join('  ·  '));
+    if (notes.length) pdfText(c, notes.join('   |   '), M, yy + 78, 22, 500, PAL.warn);
+    var top = 400, bb = await imgGet(r.id), im = bb ? await blobImage(bb) : null;
+    if (im && r.rc) {
+      var tmp = document.createElement('canvas'); tmp.width = im.naturalWidth; tmp.height = im.naturalHeight;
+      drawOverlayOn(tmp, { rectSrc: im, ans: r.ans, ver: r.ver, sid: r.sid, mode: 'grade' }, ex, PAL);
+      var s1 = Math.min((PDFW - 2 * M) / tmp.width, (PDFH - top - 150) / tmp.height), w1 = tmp.width * s1, h1 = tmp.height * s1;
+      c.drawImage(tmp, (PDFW - w1) / 2, top, w1, h1); c.strokeStyle = PAL.line; c.lineWidth = 2; c.strokeRect((PDFW - w1) / 2, top, w1, h1);
+      pdfText(c, '✓ đúng   ✗ sai (X đỏ trên ô đã tô)   vòng nét đứt xanh: đáp án đúng', M, top + h1 + 34, 20, 400, PAL.mut);
+    } else if (im) {
+      var s2 = Math.min((PDFW - 2 * M) / im.naturalWidth, (PDFH - top - 150) / im.naturalHeight), w2 = im.naturalWidth * s2, h2 = im.naturalHeight * s2;
+      c.drawImage(im, (PDFW - w2) / 2, top, w2, h2);
+      pdfText(c, 'Ảnh gốc của phiếu (bài chấm bằng phiên bản cũ, chưa có dấu đúng/sai trên ảnh).', M, top + h2 + 34, 20, 400, PAL.mut);
+    } else {
+      pdfText(c, 'Không có ảnh phiếu. Đáp án sinh viên đã chọn:', M, top + 10, 26, 600);
+      for (var q = 0; q < ex.n; q++) {
+        var col = Math.floor(q / 10), row = q % 10, qs = key && key[q] ? qScore(ex, key[q], r.ans[q], q) : null;
+        var mk = qs ? (qs.kind === 'full' ? ' ✓' : qs.kind === 'part' ? ' ½' : ' ✗') : '';
+        pdfText(c, (q + 1) + ': ' + (r.ans[q] || '-') + mk, M + col * 210, top + 70 + row * 44, 26, 500, qs ? (qs.kind === 'full' ? PAL.ok : qs.kind === 'part' ? PAL.warn : PAL.bad) : PAL.ink);
+      }
+    }
+    pdfFooter(c, ex, pg, pages);
+  }
+  function pdfSummaryPage(cv, ex, rows, from, pg, pages) {
+    var c = pdfNewPage(cv), M = 70, per = 38;
+    pdfText(c, ex.name + ': bảng tổng hợp', M, 78, 34, 700); c.fillStyle = PAL.line; c.fillRect(M, 98, PDFW - 2 * M, 2);
+    var cols = [['STT', M, 'left'], ['ID', M + 90, 'left'], ['Họ tên', M + 330, 'left'], ['Mã đề', M + 800, 'left'], ['Đúng', M + 920, 'right'], ['Điểm', PDFW - M, 'right']], y = 150;
+    cols.forEach(function (k) { pdfText(c, k[0], k[1], y, 22, 700, PAL.mut, k[2]); });
+    c.fillStyle = PAL.line; c.fillRect(M, y + 14, PDFW - 2 * M, 2);
+    rows.slice(from, from + per).forEach(function (x, i) {
+      var yy = y + 54 + i * 38, r = x.r, g = x.g;
+      pdfText(c, from + i + 1, M, yy, 22, 400, PAL.mut); pdfText(c, r.sid || 'không có', M + 90, yy, 22, 500);
+      pdfText(c, ex.roster[r.sid] || (r.nm ? '(xem ảnh tên ở trang bài)' : ''), M + 330, yy, 21, 400, PAL.mut);
+      pdfText(c, r.ver || (g ? '(' + g.usedVer + ')' : '-'), M + 800, yy, 22, 400);
+      pdfText(c, g ? g.ok + '/' + g.tot : '-', M + 920, yy, 22, 400, PAL.ink, 'right'); pdfText(c, g ? fmt(g.score) : '-', PDFW - M, yy, 24, 700, PAL.ink, 'right');
+    });
+    pdfFooter(c, ex, pg, pages);
+  }
+  function pdfStatsPage(cv, ex, rows, pg, pages) {
+    var c = pdfNewPage(cv), M = 70, scored = rows.filter(function (x) { return x.g; }), st = calcStats(scored.map(function (x) { return x.g.score; }), ex);
+    pdfText(c, 'Thống kê bài kiểm tra', M, 84, 40, 700); pdfText(c, ex.name + '  ·  ' + new Date().toLocaleDateString('vi-VN'), M, 126, 24, 400, PAL.mut);
+    c.fillStyle = PAL.line; c.fillRect(M, 146, PDFW - 2 * M, 2);
+    var items = [['Số bài đã chấm', rows.length], ['Số bài có điểm', scored.length], ['Trung bình (Mean)', st ? fmt(st.mean) : '-'], ['Trung vị (Median)', st ? fmt(st.median) : '-'], ['Độ lệch chuẩn (SD, mẫu n-1)', st ? fmt(st.sd) : '-'], ['Thấp nhất (Min)', st ? fmt(st.min) : '-'], ['Cao nhất (Max)', st ? fmt(st.max) : '-'], ['Điểm đạt', fmt(passScore(ex)) + ' / ' + fmt(ex.scale)], ['Số bài đạt', st ? st.pass : '-'], ['Tỷ lệ đạt (Pass rate)', st ? fmt(Math.round(st.rate * 1000) / 10) + '%' : '-']];
+    items.forEach(function (it, i) { var col = i % 2, row = Math.floor(i / 2), x = M + col * 540, y = 210 + row * 62; pdfText(c, it[0], x, y, 23, 400, PAL.mut); pdfText(c, it[1], x + 500, y, 28, 700, PAL.ink, 'right'); c.fillStyle = PAL.line; c.fillRect(x, y + 14, 500, 1); });
+    var y0 = 210 + 5 * 62 + 40;
+    var bins = new Array(10).fill(0); scored.forEach(function (x) { bins[Math.min(9, Math.floor(x.g.score / ex.scale * 10))]++; });
+    var mx = Math.max(1, Math.max.apply(null, bins)); pdfText(c, 'Phân bố điểm (số bài theo khoảng điểm)', M, y0, 26, 600);
+    for (var i = 0; i < 10; i++) { var bh = bins[i] / mx * 200, bx = M + 20 + i * 108; c.fillStyle = PAL.acc; c.fillRect(bx, y0 + 270 - bh, 90, bh); if (bins[i]) pdfText(c, bins[i], bx + 45, y0 + 262 - bh, 22, 700, PAL.ink, 'center'); pdfText(c, fmt(ex.scale * i / 10, 1), bx + 45, y0 + 304, 19, 400, PAL.mut, 'center'); }
+    c.fillStyle = PAL.line; c.fillRect(M, y0 + 272, PDFW - 2 * M, 2);
+    var y1 = y0 + 370, rates = [], graded = scored.length;
+    pdfText(c, 'Tỷ lệ làm đúng từng câu', M, y1, 26, 600);
+    for (var q = 0; q < ex.n; q++) { var okc = 0, tot = 0; rows.forEach(function (x) { var kk = ex.keys[x.r.ver || defaultVer(ex)]; if (kk && kk[q]) { tot++; if (qScore(ex, kk[q], x.r.ans[q], q).kind === 'full') okc++; } }); rates.push(tot ? okc / tot : null); }
+    var bw = (PDFW - 2 * M) / ex.n;
+    rates.forEach(function (v, q2) { var bx = M + q2 * bw; if (v == null) return; var bh2 = v * 170; c.fillStyle = v >= 0.5 ? PAL.ok : PAL.bad; c.fillRect(bx + 1, y1 + 200 - bh2, bw - 2, bh2); if ((q2 + 1) % 5 === 0 || q2 === 0) pdfText(c, q2 + 1, bx + bw / 2, y1 + 226, 16, 400, PAL.mut, 'center'); });
+    c.fillStyle = PAL.line; c.fillRect(M, y1 + 202, PDFW - 2 * M, 2);
+    var worst = rates.map(function (v, q3) { return { i: q3 + 1, v: v }; }).filter(function (x) { return x.v != null; }).sort(function (a, b) { return a.v - b.v; }).slice(0, 5);
+    if (worst.length) pdfText(c, 'Câu khó nhất: ' + worst.map(function (x) { return 'câu ' + x.i + ' (' + Math.round(x.v * 100) + '%)'; }).join(', '), M, y1 + 262, 22, 400, PAL.mut);
+    var ts = tagStats(ex);
+    if (ts) {
+      var y2 = y1 + 330; pdfText(c, 'Thống kê theo thẻ năng lực (đạt khi từ ' + fmt(Math.round(ts.thr * 1000) / 10) + '% trở lên)', M, y2, 26, 600);
+      ts.rows.slice(0, 8).forEach(function (t, i) { var yy = y2 + 48 + i * 40; pdfText(c, t.name, M, yy, 23, 600); pdfText(c, t.nq + ' câu', M + 420, yy, 22, 400, PAL.mut); pdfText(c, 'TB ' + (t.mean == null ? '-' : fmt(Math.round(t.mean * 1000) / 10) + '%'), M + 620, yy, 22); pdfText(c, 'Đạt ' + t.ach + ' / ' + t.n + (t.n ? ' (' + fmt(Math.round(t.ach / t.n * 1000) / 10) + '%)' : ''), PDFW - M, yy, 22, 500, PAL.ink, 'right'); });
+    }
+    pdfFooter(c, ex, pg, pages);
+  }
+  function buildPdf(pages, title) {
+    var enc = new TextEncoder(), chunks = [], pos = 0, offs = [], N = pages.length;
+    function put(x) { var b = typeof x === 'string' ? enc.encode(x) : x; chunks.push(b); pos += b.length; }
+    function obj(n, body) { offs[n] = pos; put(n + ' 0 obj\n'); put(body); put('\nendobj\n'); }
+    var th = '<FEFF'; for (var i = 0; i < title.length; i++) th += title.charCodeAt(i).toString(16).padStart(4, '0'); th += '>';
+    put('%PDF-1.4\n');
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    var kids = []; for (i = 0; i < N; i++) kids.push((4 + i * 3) + ' 0 R');
+    obj(2, '<< /Type /Pages /Kids [' + kids.join(' ') + '] /Count ' + N + ' >>');
+    obj(3, '<< /Title ' + th + ' /Producer (Cham Phieu) >>');
+    for (i = 0; i < N; i++) {
+      var b = 4 + i * 3, jp = pages[i], cs = 'q 595.28 0 0 841.89 0 0 cm /Im0 Do Q';
+      obj(b, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 ' + (b + 2) + ' 0 R >> >> /Contents ' + (b + 1) + ' 0 R >>');
+      obj(b + 1, '<< /Length ' + cs.length + ' >>\nstream\n' + cs + '\nendstream');
+      offs[b + 2] = pos; put((b + 2) + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + PDFW + ' /Height ' + PDFH + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jp.length + ' >>\nstream\n'); put(jp); put('\nendstream\nendobj\n');
+    }
+    var xr = pos, cnt = 4 + N * 3; put('xref\n0 ' + cnt + '\n0000000000 65535 f \n');
+    for (i = 1; i < cnt; i++) put(String(offs[i]).padStart(10, '0') + ' 00000 n \n');
+    put('trailer\n<< /Size ' + cnt + ' /Root 1 0 R /Info 3 0 R >>\nstartxref\n' + xr + '\n%%EOF');
+    return new Blob(chunks, { type: 'application/pdf' });
+  }
+  async function exportResPdf() {
+    var ex = cur(), rows = resultRows(ex), prog = function (t) { var el = $('#pdfProg'); if (el) { el.hidden = false; el.textContent = t; } };
+    if (!rows.length) { toast('Chưa có bài nào để xuất'); return; }
+    if (ui.pdfBusy) return; ui.pdfBusy = true;
+    try {
+      try { await document.fonts.load('700 20px "Be Vietnam Pro"'); await document.fonts.load('400 20px "Be Vietnam Pro"'); } catch (e0) {}
+      var per = 38, nSum = Math.ceil(rows.length / per), total = rows.length + nSum + 1, cv = document.createElement('canvas'), jpegs = [];
+      async function snap() { var b = await new Promise(function (res) { cv.toBlob(res, 'image/jpeg', 0.82); }); jpegs.push(new Uint8Array(await b.arrayBuffer())); await new Promise(function (r2) { setTimeout(r2, 0); }); }
+      for (var i = 0; i < rows.length; i++) { prog('Đang tạo PDF: bài ' + (i + 1) + ' / ' + rows.length + '…'); await pdfStudentPage(cv, ex, rows[i].r, i, rows.length, i + 1, total); await snap(); }
+      for (var p = 0; p < nSum; p++) { prog('Đang tạo bảng tổng hợp…'); pdfSummaryPage(cv, ex, rows, p * per, rows.length + p + 1, total); await snap(); }
+      prog('Đang tạo trang thống kê…'); pdfStatsPage(cv, ex, rows, total, total); await snap();
+      var blob = buildPdf(jpegs, ex.name + ' - bài chấm');
+      prog('Đã tạo xong (' + Math.round(blob.size / 1024 / 102.4) / 10 + ' MB).');
+      await saveFile(safeName(ex.name) + '_' + dateTag() + '.pdf', blob);
+    } catch (e) { if (window.console) console.error(e); ui.dlMsg = 'Không tạo được PDF: ' + (e && e.message ? e.message : 'lỗi'); render(); }
+    ui.pdfBusy = false;
+  }
   async function downloadPdf() {
     var bin = atob(PDF_B64), bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -1613,6 +1749,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         S.exams = S.exams.filter(function (x) { return x.id !== ex.id; }); S.cur = S.exams[0].id; ui.confirmDel = null; save(); render(); break;
       case 'xlsx': exportXlsx(); break;
       case 'csv': exportCsv(); break;
+      case 'exppdf': exportResPdf(); break;
       case 'pdf': downloadPdf(); break;
       case 'roster': ui.rosterOpen = !ui.rosterOpen; render(); break;
       case 'rostersave':
