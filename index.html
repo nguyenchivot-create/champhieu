@@ -732,7 +732,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var sa = false; try { sa = !!(window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)); } catch (e) {}
     var anyRes = S.exams.some(function (e) { return e.results.length; });
     if (sa && !S.saDismiss && !anyRes && !(ui.review && ui.tab === 'scan')) {
-      v.insertAdjacentHTML('afterbegin', '<div class="banner info"><b>Bạn đang mở từ biểu tượng ở Màn hình chính.</b><div class="small" style="margin-top:6px">Trên iPhone, ứng dụng này có kho dữ liệu riêng, tách khỏi Safari nên chưa thấy đáp án và bài đã chấm. Để chuyển sang: mở bằng Safari, vào tab Kết quả, bấm "Sao lưu về máy" (kèm ảnh), rồi mở lại ở đây và bấm "Khôi phục (gộp thêm)" ở cuối tab Kết quả. Hoặc xóa biểu tượng và thêm lại, tắt tùy chọn "Mở dưới dạng ứng dụng web" để dùng chung dữ liệu với Safari.</div><div class="row" style="margin-top:10px"><button class="btn" data-act="gores">Đến Sao lưu và khôi phục</button><button class="btn" data-act="sadismiss">Đã hiểu, ẩn</button></div></div>');
+      v.insertAdjacentHTML('afterbegin', '<div class="banner info"><b>Bạn đang mở từ biểu tượng ở Màn hình chính.</b><div class="small" style="margin-top:6px">Trên iPhone, ứng dụng này có kho dữ liệu riêng, tách khỏi Safari nên chưa thấy đáp án và bài đã chấm. Để chuyển sang: mở bằng Safari, vào tab Kết quả, bấm "Sao lưu về máy" (kèm ảnh), rồi mở lại ở đây và bấm "Khôi phục (thêm mới)" ở cuối tab Kết quả. Hoặc xóa biểu tượng và thêm lại, tắt tùy chọn "Mở dưới dạng ứng dụng web" để dùng chung dữ liệu với Safari.</div><div class="row" style="margin-top:10px"><button class="btn" data-act="gores">Đến Sao lưu và khôi phục</button><button class="btn" data-act="sadismiss">Đã hiểu, ẩn</button></div></div>');
     }
   }
 
@@ -1113,33 +1113,39 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       pack.exams.forEach(normEx);
       if (mode === 'replace') { S.exams = pack.exams.length ? pack.exams : S.exams; S.cur = S.exams[0].id; if (pack.thr) S.thr = pack.thr; }
       else {
+        /* Gộp thêm: không bao giờ trộn vào bài hiện có. Mỗi bài trong file là một bài mới; trùng tên thì thêm số 1, 2... phía sau. */
+        var usedEx = {}, usedRes = {}, nameSet = {}, rnd = function () { return Date.now().toString(36) + Math.floor(Math.random() * 99999).toString(36); };
+        S.exams.forEach(function (x) { usedEx[x.id] = 1; nameSet[(x.name || '').trim().toLowerCase()] = 1; x.results.forEach(function (r) { usedRes[r.id] = 1; }); });
+        var renamed = 0; pack.imgMap = {};
         pack.exams.forEach(function (ne) {
-          var ex0 = S.exams.filter(function (x) { return x.id === ne.id; })[0];
-          if (!ex0) { S.exams.push(ne); return; }
-          ne.results.forEach(function (r) { var k = -1; ex0.results.forEach(function (x, i) { if (x.id === r.id) k = i; }); if (k >= 0) ex0.results[k] = r; else ex0.results.push(r); });
-          Object.keys(ne.keys).forEach(function (v) { if (!ex0.keys[v]) ex0.keys[v] = ne.keys[v]; });
-          Object.keys(ne.roster).forEach(function (v) { if (!(v in ex0.roster)) ex0.roster[v] = ne.roster[v]; });
+          if (usedEx[ne.id]) ne.id = 'e' + rnd(); usedEx[ne.id] = 1;
+          var base = (ne.name || 'Bài kiểm tra').trim(), nm = base, k = 0;
+          while (nameSet[nm.toLowerCase()]) { k++; nm = base + ' ' + k; }
+          if (k) renamed++; ne.name = nm; nameSet[nm.toLowerCase()] = 1;
+          ne.results.forEach(function (r) { if (usedRes[r.id]) { var oid = r.id; r.id = 'r' + rnd(); pack.imgMap[oid] = r.id; } usedRes[r.id] = 1; });
+          S.exams.push(ne);
         });
-      }
-      if (mode !== 'replace' && pack.exams.length) {
-        var inPack = pack.exams.map(function (e) { return e.id; });
-        var kept = S.exams.filter(function (x) { return inPack.indexOf(x.id) >= 0 || x.results.length || Object.keys(x.keys).length; });
-        if (kept.length) S.exams = kept;
-        S.cur = pack.exams[0].id;
+        pack.renamed = renamed;
+        if (pack.exams.length) {
+          var kept = S.exams.filter(function (x) { return pack.exams.indexOf(x) >= 0 || x.results.length || Object.keys(x.keys).length; });
+          if (kept.length) S.exams = kept;
+          S.cur = pack.exams[0].id;
+        }
       }
       pack.exams.forEach(function (e) { nEx++; nRes += e.results.length; });
       var imgs = pack.images || {}, nImg = 0, ids = Object.keys(imgs);
-      for (var i = 0; i < ids.length; i++) { var b = dataUrlToBlob(imgs[ids[i]]); if (b) { await imgPut(ids[i], b); nImg++; } }
+      var im2 = pack.imgMap || {};
+      for (var i = 0; i < ids.length; i++) { var b = dataUrlToBlob(imgs[ids[i]]); if (b) { var kk = ids[i], pre = kk.indexOf('n_') === 0 ? 'n_' : '', bare = pre ? kk.slice(2) : kk; if (im2[bare]) kk = pre + im2[bare]; await imgPut(kk, b); nImg++; } }
       save(); ui.restoreMode = null; ui.confirmReplace = false;
-      ui.dlMsg = 'Đã khôi phục ' + nEx + ' bài kiểm tra, ' + nRes + ' bài đã chấm, ' + nImg + ' ảnh phiếu (' + (mode === 'replace' ? 'thay thế toàn bộ' : 'gộp thêm') + ').';
+      ui.dlMsg = 'Đã khôi phục ' + nEx + ' bài kiểm tra, ' + nRes + ' bài đã chấm, ' + nImg + ' ảnh phiếu (' + (mode === 'replace' ? 'thay thế toàn bộ' : 'thêm thành bài mới, không gộp vào bài cũ') + ').' + (pack.renamed ? ' ' + pack.renamed + ' bài trùng tên đã được thêm số phía sau.' : '');
       render();
     } catch (e) { ui.restoreMode = null; ui.confirmReplace = false; ui.dlMsg = 'Không khôi phục được: ' + (e && e.message ? e.message : 'file lỗi') + ' Dữ liệu hiện tại không bị thay đổi.'; render(); }
   }
   function backupCard() {
-    var h = '<div class="card"><b>Sao lưu và khôi phục</b><div class="small muted" style="margin:6px 0 10px">Lưu toàn bộ bài đã chấm ra một file trên máy, để chuyển sang máy khác hoặc phòng khi mất dữ liệu trình duyệt.</div>' +
+    var h = '<div class="card"><b>Sao lưu và khôi phục</b><div class="small muted" style="margin:6px 0 10px">Lưu toàn bộ bài đã chấm ra một file trên máy, để chuyển sang máy khác hoặc phòng khi mất dữ liệu trình duyệt. Khôi phục (thêm mới): mỗi bài kiểm tra trong file được thêm thành bài riêng, trùng tên thì thêm số 1, 2... phía sau và không gộp vào bài cũ.</div>' +
       '<div class="grid2"><label class="f">Phạm vi<select id="bkScope"><option value="all"' + (ui.bkScope !== 'cur' ? ' selected' : '') + '>Tất cả bài kiểm tra</option><option value="cur"' + (ui.bkScope === 'cur' ? ' selected' : '') + '>Chỉ bài đang chọn</option></select></label>' +
       '<label class="f">Ảnh phiếu<select id="bkImg"><option value="1"' + (ui.bkImg !== false ? ' selected' : '') + '>Kèm ảnh (file nặng hơn)</option><option value="0"' + (ui.bkImg === false ? ' selected' : '') + '>Không kèm ảnh</option></select></label></div>' +
-      '<div class="row" style="margin-top:10px"><button class="btn primary" data-act="backup">Sao lưu về máy</button><button class="btn" data-act="restoremerge">Khôi phục (gộp thêm)</button>' +
+      '<div class="row" style="margin-top:10px"><button class="btn primary" data-act="backup">Sao lưu về máy</button><button class="btn" data-act="restoremerge">Khôi phục (thêm mới)</button>' +
       (ui.confirmReplace ? '<button class="btn danger" data-act="restorereplace">Bấm lần nữa: thay thế toàn bộ</button><button class="btn" data-act="restorecancel">Hủy</button>' : '<button class="btn" data-act="restorereplace">Khôi phục (thay thế)</button>') + '</div>' +
       (ui.confirmReplace ? '<div class="banner warn" style="margin-top:10px">Thay thế sẽ xóa dữ liệu hiện có trên máy này và thay bằng nội dung file sao lưu.</div>' : '') +
       '<input type="file" id="inRestore" accept=".json,application/json" hidden></div>';
