@@ -1348,7 +1348,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function blobImage(b) {
     return new Promise(function (res) { var u = URL.createObjectURL(b), im = new Image(); im.onload = function () { URL.revokeObjectURL(u); res(im); }; im.onerror = function () { URL.revokeObjectURL(u); res(null); }; im.src = u; });
   }
-  function pdfNewPage(cv) { cv.width = PDFW; cv.height = PDFH; var c = cv.getContext('2d'); c.fillStyle = '#ffffff'; c.fillRect(0, 0, PDFW, PDFH); return c; }
+  var PDFS = 0.8, PDFQ = 0.65; /* nén: 80% kích thước, JPEG 65% (ảnh gốc chỉ rộng 980 px nên không mất chi tiết ô tô) */
+  function pdfNewPage(cv) { cv.width = Math.round(PDFW * PDFS); cv.height = Math.round(PDFH * PDFS); var c = cv.getContext('2d'); c.scale(PDFS, PDFS); c.fillStyle = '#ffffff'; c.fillRect(0, 0, PDFW, PDFH); return c; }
   function pdfFooter(c, ex, pg, total) {
     c.fillStyle = PAL.line; c.fillRect(70, PDFH - 70, PDFW - 140, 2);
     pdfText(c, ex.name + '  ·  Chấm Phiếu', 70, PDFH - 32, 20, 400, PAL.mut, 'left');
@@ -1450,7 +1451,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       var b = 4 + i * 3, jp = pages[i], cs = 'q 595.28 0 0 841.89 0 0 cm /Im0 Do Q';
       obj(b, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 ' + (b + 2) + ' 0 R >> >> /Contents ' + (b + 1) + ' 0 R >>');
       obj(b + 1, '<< /Length ' + cs.length + ' >>\nstream\n' + cs + '\nendstream');
-      offs[b + 2] = pos; put((b + 2) + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + PDFW + ' /Height ' + PDFH + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jp.length + ' >>\nstream\n'); put(jp); put('\nendstream\nendobj\n');
+      offs[b + 2] = pos; put((b + 2) + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + Math.round(PDFW * PDFS) + ' /Height ' + Math.round(PDFH * PDFS) + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jp.length + ' >>\nstream\n'); put(jp); put('\nendstream\nendobj\n');
     }
     var xr = pos, cnt = 4 + N * 3; put('xref\n0 ' + cnt + '\n0000000000 65535 f \n');
     for (i = 1; i < cnt; i++) put(String(offs[i]).padStart(10, '0') + ' 00000 n \n');
@@ -1464,7 +1465,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     try {
       try { await document.fonts.load('700 20px "Be Vietnam Pro"'); await document.fonts.load('400 20px "Be Vietnam Pro"'); } catch (e0) {}
       var per = 38, nSum = Math.ceil(rows.length / per), total = rows.length + nSum + 1, cv = document.createElement('canvas'), jpegs = [];
-      async function snap() { var b = await new Promise(function (res) { cv.toBlob(res, 'image/jpeg', 0.82); }); jpegs.push(new Uint8Array(await b.arrayBuffer())); await new Promise(function (r2) { setTimeout(r2, 0); }); }
+      async function snap() { var b = await new Promise(function (res) { cv.toBlob(res, 'image/jpeg', PDFQ); }); jpegs.push(new Uint8Array(await b.arrayBuffer())); await new Promise(function (r2) { setTimeout(r2, 0); }); }
       for (var i = 0; i < rows.length; i++) { prog('Đang tạo PDF: bài ' + (i + 1) + ' / ' + rows.length + '…'); await pdfStudentPage(cv, ex, rows[i].r, i, rows.length, i + 1, total); await snap(); }
       for (var p = 0; p < nSum; p++) { prog('Đang tạo bảng tổng hợp…'); pdfSummaryPage(cv, ex, rows, p * per, rows.length + p + 1, total); await snap(); }
       prog('Đang tạo trang thống kê…'); pdfStatsPage(cv, ex, rows, total, total); await snap();
