@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Chấm Phiếu</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Chấm Phiếu">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#204f9c">
@@ -731,6 +729,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     else v.innerHTML = viewPrint();
     if (ui.tab === 'scan' && ui.review) { refreshReview(true); }
     if (ui.tab === 'res') { drawCharts(); hydrateNames(); }
+    var sa = false; try { sa = !!(window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)); } catch (e) {}
+    var anyRes = S.exams.some(function (e) { return e.results.length; });
+    if (sa && !S.saDismiss && !anyRes && !(ui.review && ui.tab === 'scan')) {
+      v.insertAdjacentHTML('afterbegin', '<div class="banner info"><b>Bạn đang mở từ biểu tượng ở Màn hình chính.</b><div class="small" style="margin-top:6px">Trên iPhone, ứng dụng này có kho dữ liệu riêng, tách khỏi Safari nên chưa thấy đáp án và bài đã chấm. Để chuyển sang: mở bằng Safari, vào tab Kết quả, bấm "Sao lưu về máy" (kèm ảnh), rồi mở lại ở đây và bấm "Khôi phục (gộp thêm)" ở cuối tab Kết quả. Hoặc xóa biểu tượng và thêm lại, tắt tùy chọn "Mở dưới dạng ứng dụng web" để dùng chung dữ liệu với Safari.</div><div class="row" style="margin-top:10px"><button class="btn" data-act="gores">Đến Sao lưu và khôi phục</button><button class="btn" data-act="sadismiss">Đã hiểu, ẩn</button></div></div>');
+    }
   }
 
   /* ---------- Tab: Chấm bài ---------- */
@@ -1536,6 +1539,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       case 'keyscan': $('#inKey').click(); break;
       case 'clearerr': ui.errs = []; render(); break;
       case 'skip': var wasEdit = r && r.editId; ui.review = null; ui.busy = false; if (wasEdit) ui.tab = 'res'; render(); if (!wasEdit) processNext(); break;
+      case 'gores': ui.tab = 'res'; render(); window.scrollTo(0, document.body.scrollHeight); break;
+      case 'sadismiss': S.saDismiss = 1; save(); render(); break;
       case 'tglid': S.showId = S.showId === false; save(); render(); break;
       case 'tglver': S.showVer = S.showVer === false; save(); render(); break;
       case 'tglnm': S.showNm = S.showNm === false; save(); render(); break;
@@ -1648,6 +1653,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   });
 
   render();
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (ePs) {}
   getDl();
 })();
 </script>
