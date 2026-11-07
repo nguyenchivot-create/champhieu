@@ -9,6 +9,14 @@
 | Ứng dụng (mở bằng Safari) | https://nguyenchivot-create.github.io/champhieu/ |
 | Mã nguồn trên GitHub | https://github.com/nguyenchivot-create/champhieu |
 
+### Quét mã QR để mở ứng dụng
+
+<p align="center">
+  <img src="qr-champhieu.png" alt="Mã QR mở ứng dụng Chấm Phiếu" width="240">
+</p>
+
+Dùng camera điện thoại quét mã trên để mở thẳng ứng dụng bằng trình duyệt, không cần cài đặt. Nếu quét bằng ứng dụng khác mà mở trong khung nhúng, hãy chọn "Mở bằng Safari" để dữ liệu được lưu đúng chỗ.
+
 ## Tính năng chính
 
 - **Chấm bằng camera hoặc ảnh:** chụp từng phiếu, hoặc chấm liên tục (đưa phiếu mới vào khung, máy tự nhận và lưu).
@@ -59,5 +67,6 @@ Phiếu cần thấy đủ 6 ô vuông đen ở các góc và hai bên. Chụp t
 | `index.html` | Toàn bộ ứng dụng trong một tệp (giao diện, bộ nhận dạng phiếu, thư viện xuất Excel) |
 | `apple-touch-icon.png` | Biểu tượng khi thêm vào Màn hình chính iPhone |
 | `icon-512.png` | Biểu tượng kích thước lớn |
+| `qr-champhieu.png` | Mã QR dẫn tới ứng dụng |
 
 Trang được phát hành qua GitHub Pages từ nhánh `main`.
